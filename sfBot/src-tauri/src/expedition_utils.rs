@@ -9,6 +9,7 @@ use std::{
 
 use chrono::Local;
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use sf_api::gamestate::{
     items::{Equipment, EquipmentSlot},
     rewards::{Reward, RewardType},
@@ -21,6 +22,27 @@ use crate::utils::shitty_print;
 pub static CHARACTER_ENCOUNTER_COUNTERS: Lazy<Mutex<HashMap<String, HashMap<ExpeditionThing, u32>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 pub static EXPEDITION_STATS: Lazy<Mutex<HashMap<ExpeditionThing, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+struct ExpeditionStats
+{
+    picked: u32,
+    encounters: HashMap<String, u32>,
+    heroism_total: u64,
+    heroism_max: u32,
+    heroism_last: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+struct CharacterExpeditionStats
+{
+    character: String,
+    character_id: u32,
+    server: String,
+    expeditions: HashMap<String, ExpeditionStats>,
+}
 
 /// Increment the encounter count for a specific character.
 pub fn increment_encounter_count(character_name: &str, encounter: ExpeditionThing)
@@ -69,11 +91,19 @@ pub fn get_all_encounters_counts(character_name: &str) -> HashMap<ExpeditionThin
 }
 
 /// Log expedition information for a specific character.
-pub fn log_expedition_info(character_name: &str, current_floor: u8, chosen_expedition_type: Option<&ExpeditionThing>, active_heroism: u32, encounter_counts: &HashMap<ExpeditionThing, u32>)
+pub fn log_expedition_info(character_name: &str, character_id: u32, server: &str, current_floor: u8, chosen_expedition_type: Option<&ExpeditionThing>, active_heroism: u32, encounter_counts: &HashMap<ExpeditionThing, u32>)
 {
     if current_floor != 10
     {
         return;
+    }
+
+    if let Some(expedition_type) = chosen_expedition_type
+    {
+        if let Err(err) = update_expedition_stats(character_name, character_id, server, expedition_type, active_heroism, encounter_counts)
+        {
+            eprintln!("Failed to update expedition stats: {}", err);
+        }
     }
 
     let log_folder = exe_relative_path("expedition_logs");
@@ -99,6 +129,100 @@ pub fn log_expedition_info(character_name: &str, current_floor: u8, chosen_exped
 
     let heroism_message = format!("Heroism: {}\n", active_heroism);
     log_file.write_all(heroism_message.as_bytes()).expect("Failed to write heroism info to log file");
+}
+
+fn update_expedition_stats(character_name: &str, character_id: u32, server: &str, expedition_type: &ExpeditionThing, active_heroism: u32, encounter_counts: &HashMap<ExpeditionThing, u32>) -> Result<(), Box<dyn std::error::Error>>
+{
+    let stats_folder = exe_relative_path("expeditions_stats");
+    if !stats_folder.exists()
+    {
+        fs::create_dir_all(&stats_folder)?;
+    }
+
+    let safe_name = sanitize_filename(character_name);
+    let safe_server = sanitize_filename_with_fallback(&server.to_lowercase(), "unknown");
+    let stats_file = stats_folder.join(format!("{}_{}_{}_expeditions.json", safe_name, safe_server, character_id));
+    let legacy_file = stats_folder.join(format!("{}_expeditions.json", safe_name));
+
+    let mut stats: CharacterExpeditionStats = if stats_file.exists()
+    {
+        let raw = fs::read_to_string(&stats_file).unwrap_or_default();
+        serde_json::from_str(&raw).unwrap_or_default()
+    }
+    else if legacy_file.exists()
+    {
+        let raw = fs::read_to_string(&legacy_file).unwrap_or_default();
+        serde_json::from_str(&raw).unwrap_or_default()
+    }
+    else
+    {
+        CharacterExpeditionStats::default()
+    };
+
+    if stats.character.is_empty()
+    {
+        stats.character = character_name.to_string();
+    }
+    if stats.character_id == 0
+    {
+        stats.character_id = character_id;
+    }
+    if stats.server.is_empty()
+    {
+        stats.server = server.to_lowercase();
+    }
+
+    let expedition_key = format!("{:?}", expedition_type);
+    let expedition_entry = stats.expeditions.entry(expedition_key).or_insert_with(ExpeditionStats::default);
+    expedition_entry.picked = expedition_entry.picked.saturating_add(1);
+    expedition_entry.heroism_total = expedition_entry.heroism_total.saturating_add(active_heroism as u64);
+    if active_heroism > expedition_entry.heroism_max
+    {
+        expedition_entry.heroism_max = active_heroism;
+    }
+    expedition_entry.heroism_last = active_heroism;
+
+    for (encounter, count) in encounter_counts
+    {
+        let encounter_key = format!("{:?}", encounter);
+        let entry = expedition_entry.encounters.entry(encounter_key).or_insert(0);
+        *entry = entry.saturating_add(*count);
+    }
+
+    let serialized = serde_json::to_string_pretty(&stats)?;
+    fs::write(stats_file, serialized.as_bytes())?;
+    Ok(())
+}
+
+fn sanitize_filename(name: &str) -> String
+{
+    sanitize_filename_with_fallback(name, "character")
+}
+
+fn sanitize_filename_with_fallback(name: &str, fallback: &str) -> String
+{
+    let mut sanitized = String::with_capacity(name.len());
+    for ch in name.chars()
+    {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'
+        {
+            sanitized.push(ch);
+        }
+        else
+        {
+            sanitized.push('_');
+        }
+    }
+
+    let trimmed = sanitized.trim_matches('_');
+    if trimmed.is_empty()
+    {
+        fallback.to_string()
+    }
+    else
+    {
+        trimmed.to_string()
+    }
 }
 
 pub fn should_buy_beer(character_equip: &Equipment, amount_of_beers_to_drink: u8, amount_of_beers_drunk: u8, amount_of_beers_max: u8, current_thirst: u32, current_mushroom_amount: u32, shrooms_to_keep: u32) -> bool

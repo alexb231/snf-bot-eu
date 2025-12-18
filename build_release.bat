@@ -31,12 +31,40 @@ if errorlevel 1 (
 popd
 
 taskkill /im sfbot.exe /f >nul 2>&1
+taskkill /im sfbotTest.exe /f >nul 2>&1
+call :wait_process_exit sfbot.exe
+call :wait_process_exit sfbotTest.exe
 
-xcopy /y /i "%TAURI_DIR%\target\release\*" "%OUT_DIR%\" >nul
-if errorlevel 1 (
+set "COPY_OK="
+call :copy_release "%TAURI_DIR%\target\release\sfbotTest.exe" "%OUT_DIR%\sfbotTest.exe"
+if not defined COPY_OK (
   echo Fehler: Kopieren fehlgeschlagen
   exit /b 1
 )
 
 echo Fertig.
 endlocal
+goto :eof
+
+:wait_process_exit
+for /l %%i in (1,1,10) do (
+  tasklist /fi "imagename eq %~1" | find /i "%~1" >nul || goto :eof
+  timeout /t 1 /nobreak >nul
+)
+goto :eof
+
+:copy_release
+for /l %%i in (1,1,5) do (
+  if not exist "%~1" (
+    timeout /t 1 /nobreak >nul
+    goto :continue_copy
+  )
+  copy /y "%~1" "%~2" >nul
+  if not errorlevel 1 (
+    set "COPY_OK=1"
+    goto :eof
+  )
+  :continue_copy
+  timeout /t 1 /nobreak >nul
+)
+goto :eof

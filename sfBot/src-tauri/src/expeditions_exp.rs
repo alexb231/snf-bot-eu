@@ -70,6 +70,7 @@ pub fn convert_string_to_reward(string_reward_type: &str) -> Option<RewardType>
 
 pub async fn play_expeditions_exp(session: &mut SimpleSession, char_name: &str, skip_wait_time_using_hourglas: bool, beers_to_drink: u8, prio_list: Vec<String>) -> Result<String, Box<dyn std::error::Error>>
 {
+    let server_host = session.server_url().host_str().map(|s| s.to_string()).unwrap_or_else(|| "unknown".to_string());
     let mut chosen_expedition_type: Option<ExpeditionThing> = None;
     let user_setting_prio = map_prios(prio_list);
     let global_map = get_global_settings().await.unwrap_or_default();
@@ -113,7 +114,7 @@ pub async fn play_expeditions_exp(session: &mut SimpleSession, char_name: &str, 
                             pretty_print(msg, gs);
                         }
                         print_all_encounter_counts(char_name);
-                        log_expedition_info(char_name, active.current_floor, chosen_expedition_type.as_ref(), active.heroism as u32, &get_all_encounters_counts(char_name));
+                        log_expedition_info(char_name, gs.character.player_id, &server_host, active.current_floor, chosen_expedition_type.as_ref(), active.heroism as u32, &get_all_encounters_counts(char_name));
                     }
 
                     Command::ExpeditionContinue
