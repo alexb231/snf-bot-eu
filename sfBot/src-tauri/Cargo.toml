@@ -1,5 +1,5 @@
 [package]
-name = "sfbot"
+name = "sfbotTest"
 version = "1.0.0"
 description = "SF Bot HTTP API Server"
 authors = ["you"]
@@ -10,7 +10,7 @@ name = "sfbot_lib"
 crate-type = ["rlib"]
 
 [[bin]]
-name = "sfbot"
+name = "sfbotTest"
 path = "src/main.rs"
 
 [dependencies]

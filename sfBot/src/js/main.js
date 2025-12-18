@@ -321,11 +321,9 @@ async function refreshBotStatus() {
 
         // Update characters from status - merge with cached inactive characters
         if (status.characters && status.characters.length > 0) {
-            // Map existing cached characters for enrichment
+            // Map existing characters (cached or last known) for enrichment/fallbacks
             const cachedMap = new Map(
-                state.characters
-                    .filter(c => c.cached)
-                    .map(c => [`${c.id}_${c.server}`, c])
+                state.characters.map(c => [`${c.id}_${c.server}`, c])
             );
 
             // Active/status characters enriched with cached details if available
@@ -335,9 +333,10 @@ async function refreshBotStatus() {
                 return {
                     ...c,
                     cached: false,
-                    mount: cached?.mount || c.mount || '-',
-                    luckycoins: cached?.luckycoins ?? c.luckycoins ?? 0,
-                    hourglasses: cached?.hourglasses ?? c.hourglasses ?? 0,
+                    // Prefer live values; fall back to cache only if missing
+                    mount: c.mount || cached?.mount || '-',
+                    luckycoins: c.luckycoins ?? cached?.luckycoins ?? 0,
+                    hourglasses: c.hourglasses ?? cached?.hourglasses ?? 0,
                     beers: c.beers ?? cached?.beers ?? 0,
                     mushrooms: c.mushrooms ?? cached?.mushrooms ?? 0,
                     gold: c.gold ?? cached?.gold ?? 0,

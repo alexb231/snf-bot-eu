@@ -2390,7 +2390,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sfbot"
+name = "sfbotTest"
 version = "1.0.0"
 dependencies = [
  "anyhow",
