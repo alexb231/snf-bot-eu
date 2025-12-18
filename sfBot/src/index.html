@@ -1171,7 +1171,14 @@
     <div id="expedition-stats-modal" class="modal">
         <div class="modal-content modal-large expedition-stats-modal">
             <div class="modal-header">
-                <h3 id="expedition-stats-title" data-i18n="expeditionStats.title">Expedition Stats</h3>
+                <div class="modal-header-group">
+                    <h3 id="expedition-stats-title" data-i18n="expeditionStats.title">Expedition Stats</h3>
+                    <div class="modal-toggle" id="expedition-stats-toggle">
+                        <button class="toggle-btn active" data-mode="all" data-i18n="expeditionStats.modeAll">All</button>
+                        <button class="toggle-btn" data-mode="exp" data-i18n="expeditionStats.modeExp">EXP</button>
+                        <button class="toggle-btn" data-mode="gold" data-i18n="expeditionStats.modeGold">Gold</button>
+                    </div>
+                </div>
                 <button class="modal-close" id="close-expedition-stats">&times;</button>
             </div>
             <div class="modal-body">
@@ -1188,7 +1195,14 @@
     <div id="expedition-summary-modal" class="modal">
         <div class="modal-content modal-large expedition-summary-modal">
             <div class="modal-header">
-                <h3 id="expedition-summary-title" data-i18n="expeditionSummary.title">Expedition Overview</h3>
+                <div class="modal-header-group">
+                    <h3 id="expedition-summary-title" data-i18n="expeditionSummary.title">Expedition Overview</h3>
+                    <div class="modal-toggle" id="expedition-summary-toggle">
+                        <button class="toggle-btn active" data-mode="all" data-i18n="expeditionSummary.modeAll">All</button>
+                        <button class="toggle-btn" data-mode="exp" data-i18n="expeditionSummary.modeExp">EXP</button>
+                        <button class="toggle-btn" data-mode="gold" data-i18n="expeditionSummary.modeGold">Gold</button>
+                    </div>
+                </div>
                 <button class="modal-close" id="close-expedition-summary">&times;</button>
             </div>
             <div class="modal-body">

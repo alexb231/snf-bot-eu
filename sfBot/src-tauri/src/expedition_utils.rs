@@ -43,6 +43,24 @@ struct CharacterExpeditionStats
     character_id: u32,
     server: String,
     expeditions: HashMap<String, ExpeditionStats>,
+    modes: HashMap<String, ModeExpeditionStats>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+struct ModeExpeditionStats
+{
+    expeditions: HashMap<String, ExpeditionStats>,
+}
+
+#[derive(Default)]
+struct AggregateStats
+{
+    picked: u64,
+    heroism_total: u64,
+    heroism_max: u32,
+    keys: u64,
+    chests: u64,
 }
 
 /// Increment the encounter count for a specific character.
@@ -92,7 +110,7 @@ pub fn get_all_encounters_counts(character_name: &str) -> HashMap<ExpeditionThin
 }
 
 /// Log expedition information for a specific character.
-pub fn log_expedition_info(character_name: &str, character_id: u32, server: &str, current_floor: u8, chosen_expedition_type: Option<&ExpeditionThing>, active_heroism: u32, encounter_counts: &HashMap<ExpeditionThing, u32>)
+pub fn log_expedition_info(character_name: &str, character_id: u32, server: &str, mode: &str, current_floor: u8, chosen_expedition_type: Option<&ExpeditionThing>, active_heroism: u32, encounter_counts: &HashMap<ExpeditionThing, u32>)
 {
     if current_floor != 10
     {
@@ -103,7 +121,7 @@ pub fn log_expedition_info(character_name: &str, character_id: u32, server: &str
 
     if let Some(expedition_type) = chosen_expedition_type
     {
-        if let Err(err) = update_expedition_stats(character_name, character_id, server, expedition_type, sanitized_heroism, encounter_counts)
+        if let Err(err) = update_expedition_stats(character_name, character_id, server, mode, expedition_type, sanitized_heroism, encounter_counts)
         {
             eprintln!("Failed to update expedition stats: {}", err);
         }
@@ -134,7 +152,7 @@ pub fn log_expedition_info(character_name: &str, character_id: u32, server: &str
     log_file.write_all(heroism_message.as_bytes()).expect("Failed to write heroism info to log file");
 }
 
-fn update_expedition_stats(character_name: &str, character_id: u32, server: &str, expedition_type: &ExpeditionThing, active_heroism: u32, encounter_counts: &HashMap<ExpeditionThing, u32>) -> Result<(), Box<dyn std::error::Error>>
+fn update_expedition_stats(character_name: &str, character_id: u32, server: &str, mode: &str, expedition_type: &ExpeditionThing, active_heroism: u32, encounter_counts: &HashMap<ExpeditionThing, u32>) -> Result<(), Box<dyn std::error::Error>>
 {
     let stats_folder = exe_relative_path("expeditions_stats");
     if !stats_folder.exists()
@@ -177,24 +195,37 @@ fn update_expedition_stats(character_name: &str, character_id: u32, server: &str
 
     let expedition_key = format!("{:?}", expedition_type);
     let expedition_entry = stats.expeditions.entry(expedition_key).or_insert_with(ExpeditionStats::default);
-    expedition_entry.picked = expedition_entry.picked.saturating_add(1);
-    expedition_entry.heroism_total = expedition_entry.heroism_total.saturating_add(active_heroism as u64);
-    if active_heroism > expedition_entry.heroism_max
-    {
-        expedition_entry.heroism_max = active_heroism;
-    }
-    expedition_entry.heroism_last = active_heroism;
+    update_expedition_entry(expedition_entry, active_heroism, encounter_counts);
 
-    for (encounter, count) in encounter_counts
+    if !mode.is_empty()
     {
-        let encounter_key = format!("{:?}", encounter);
-        let entry = expedition_entry.encounters.entry(encounter_key).or_insert(0);
-        *entry = entry.saturating_add(*count);
+        let mode_key = mode.to_lowercase();
+        let mode_entry = stats.modes.entry(mode_key).or_insert_with(ModeExpeditionStats::default);
+        let mode_expedition_entry = mode_entry.expeditions.entry(format!("{:?}", expedition_type)).or_insert_with(ExpeditionStats::default);
+        update_expedition_entry(mode_expedition_entry, active_heroism, encounter_counts);
     }
 
     let serialized = serde_json::to_string_pretty(&stats)?;
     fs::write(stats_file, serialized.as_bytes())?;
     Ok(())
+}
+
+fn update_expedition_entry(entry: &mut ExpeditionStats, active_heroism: u32, encounter_counts: &HashMap<ExpeditionThing, u32>)
+{
+    entry.picked = entry.picked.saturating_add(1);
+    entry.heroism_total = entry.heroism_total.saturating_add(active_heroism as u64);
+    if active_heroism > entry.heroism_max
+    {
+        entry.heroism_max = active_heroism;
+    }
+    entry.heroism_last = active_heroism;
+
+    for (encounter, count) in encounter_counts
+    {
+        let encounter_key = format!("{:?}", encounter);
+        let entry = entry.encounters.entry(encounter_key).or_insert(0);
+        *entry = entry.saturating_add(*count);
+    }
 }
 
 fn sanitize_heroism(value: u32) -> u32
@@ -245,20 +276,11 @@ pub fn read_expedition_summary() -> Result<Value, String>
     let stats_folder = exe_relative_path("expeditions_stats");
     if !stats_folder.exists()
     {
-        return Ok(serde_json::json!({ "expeditions": {} }));
-    }
-
-    #[derive(Default)]
-    struct AggregateStats
-    {
-        picked: u64,
-        heroism_total: u64,
-        heroism_max: u32,
-        keys: u64,
-        chests: u64,
+        return Ok(serde_json::json!({ "expeditions": {}, "modes": {} }));
     }
 
     let mut aggregated: HashMap<String, AggregateStats> = HashMap::new();
+    let mut aggregated_modes: HashMap<String, HashMap<String, AggregateStats>> = HashMap::new();
 
     let entries = fs::read_dir(&stats_folder).map_err(|e| e.to_string())?;
     for entry in entries
@@ -294,24 +316,17 @@ pub fn read_expedition_summary() -> Result<Value, String>
             None => continue,
         };
 
-        for (expedition_name, expedition_data) in expeditions
+        accumulate_expeditions(expeditions, &mut aggregated);
+
+        if let Some(modes) = data.get("modes").and_then(|v| v.as_object())
         {
-            let picked = expedition_data.get("picked").and_then(|v| v.as_u64()).unwrap_or(0);
-            let heroism_total = expedition_data.get("heroism_total").and_then(|v| v.as_u64()).unwrap_or(0);
-            let heroism_max = expedition_data.get("heroism_max").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-
-            let encounters = expedition_data.get("encounters").and_then(|v| v.as_object());
-            let keys = get_encounter_total(encounters, &["Key", "Keys"]);
-            let chests = get_encounter_total(encounters, &["Suitcase", "Chests"]);
-
-            let entry = aggregated.entry(expedition_name.clone()).or_default();
-            entry.picked = entry.picked.saturating_add(picked);
-            entry.heroism_total = entry.heroism_total.saturating_add(heroism_total);
-            entry.keys = entry.keys.saturating_add(keys);
-            entry.chests = entry.chests.saturating_add(chests);
-            if heroism_max > entry.heroism_max
+            for (mode_key, mode_data) in modes
             {
-                entry.heroism_max = heroism_max;
+                if let Some(mode_expeditions) = mode_data.get("expeditions").and_then(|v| v.as_object())
+                {
+                    let mode_entry = aggregated_modes.entry(mode_key.clone()).or_default();
+                    accumulate_expeditions(mode_expeditions, mode_entry);
+                }
             }
         }
     }
@@ -331,7 +346,27 @@ pub fn read_expedition_summary() -> Result<Value, String>
         );
     }
 
-    Ok(serde_json::json!({ "expeditions": expeditions_json }))
+    let mut modes_json = serde_json::Map::new();
+    for (mode_name, mode_stats) in aggregated_modes
+    {
+        let mut mode_expeditions_json = serde_json::Map::new();
+        for (expedition_name, stats) in mode_stats
+        {
+            mode_expeditions_json.insert(
+                expedition_name,
+                serde_json::json!({
+                    "picked": stats.picked,
+                    "heroism_total": stats.heroism_total,
+                    "heroism_max": stats.heroism_max,
+                    "keys": stats.keys,
+                    "chests": stats.chests
+                }),
+            );
+        }
+        modes_json.insert(mode_name, serde_json::json!({ "expeditions": mode_expeditions_json }));
+    }
+
+    Ok(serde_json::json!({ "expeditions": expeditions_json, "modes": modes_json }))
 }
 
 fn get_encounter_total(encounters: Option<&serde_json::Map<String, Value>>, names: &[&str]) -> u64
@@ -348,6 +383,30 @@ fn get_encounter_total(encounters: Option<&serde_json::Map<String, Value>>, name
         }
     }
     total
+}
+
+fn accumulate_expeditions(expeditions: &serde_json::Map<String, Value>, aggregated: &mut HashMap<String, AggregateStats>)
+{
+    for (expedition_name, expedition_data) in expeditions
+    {
+        let picked = expedition_data.get("picked").and_then(|v| v.as_u64()).unwrap_or(0);
+        let heroism_total = expedition_data.get("heroism_total").and_then(|v| v.as_u64()).unwrap_or(0);
+        let heroism_max = expedition_data.get("heroism_max").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+
+        let encounters = expedition_data.get("encounters").and_then(|v| v.as_object());
+        let keys = get_encounter_total(encounters, &["Key", "Keys"]);
+        let chests = get_encounter_total(encounters, &["Suitcase", "Chests"]);
+
+        let entry = aggregated.entry(expedition_name.clone()).or_default();
+        entry.picked = entry.picked.saturating_add(picked);
+        entry.heroism_total = entry.heroism_total.saturating_add(heroism_total);
+        entry.keys = entry.keys.saturating_add(keys);
+        entry.chests = entry.chests.saturating_add(chests);
+        if heroism_max > entry.heroism_max
+        {
+            entry.heroism_max = heroism_max;
+        }
+    }
 }
 
 fn sanitize_filename(name: &str) -> String

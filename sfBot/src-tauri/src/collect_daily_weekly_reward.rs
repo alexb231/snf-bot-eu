@@ -41,7 +41,11 @@ pub async fn collect_daily_and_weekly_rewards(session: &mut SimpleSession) -> Re
         }
     }
 
-    // collect_advents_calendar(session).await?;
+    if gs.specials.advent_calendar.is_some()
+    {
+        collect_advents_calendar(session).await?;
+        result += "Collected advent calendar.";
+    }
     Ok(result)
 }
 

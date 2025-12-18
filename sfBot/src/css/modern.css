@@ -870,6 +870,40 @@ html, body {
     border-bottom: 1px solid var(--border-color);
 }
 
+.modal-header-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.modal-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toggle-btn {
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.toggle-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+}
+
+.toggle-btn.active {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+}
+
 .modal-header h2 {
     font-size: 18px;
 }

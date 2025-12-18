@@ -199,7 +199,7 @@ pub struct TimedSpecials {
     /// Dr. Abawuwu's wheel
     pub wheel: Wheel,
 
-    pub advents_calendar: AdventsCalendar,
+    pub advent_calendar: Option<Reward>,
 }
 
 #[derive(Debug, Clone, Default)]

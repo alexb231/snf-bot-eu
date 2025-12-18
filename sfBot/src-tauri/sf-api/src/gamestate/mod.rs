@@ -214,7 +214,7 @@ impl GameState {
             )?;
             self.server_time_diff = (server_time.naive_utc()
                 - response.received_at())
-                .num_seconds();
+            .num_seconds();
             self.last_request_timestamp = ts;
         }
         let server_time = self.server_time();
@@ -1070,7 +1070,7 @@ impl GameState {
                         "other friend",
                         FromPrimitive::from_i32,
                     )
-                        .unwrap_or_default();
+                    .unwrap_or_default();
                 }
                 "otherplayerpetbonus" => {
                     other_player
@@ -1485,7 +1485,7 @@ impl GameState {
                         .current_monster = HellevatorMonster::parse(
                         &val.into_list("h monster").unwrap_or_default(),
                     )
-                        .ok();
+                    .ok();
                 }
                 "gtbonus" => {
                     self.hellevator
@@ -1518,7 +1518,7 @@ impl GameState {
                                 typ: FromPrimitive::from_i64(
                                     chunk.cfsuget(2, "claimable typ")?,
                                 )
-                                    .unwrap_or_default(),
+                                .unwrap_or_default(),
                                 msg_id: chunk.cfsuget(0, "msg_id")?,
                                 status,
                                 name: chunk.cget(3, "reward code")?.to_string(),
@@ -1564,6 +1564,13 @@ impl GameState {
                     self.guild
                         .get_or_insert_default()
                         .update_fightable_targets(val.as_str())?;
+                }
+                "adventscalendar" => {
+                    let vals: Vec<i64> = val.into_list("advent door")?;
+                    self.specials.advent_calendar = match vals.first() {
+                        Some(0) | None => None,
+                        _ => Reward::parse(&vals).ok(),
+                    };
                 }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {

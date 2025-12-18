@@ -111,7 +111,7 @@ pub async fn play_expeditions_gold(session: &mut SimpleSession, char_name: &str,
                         }
                         print_all_encounter_counts(&*gs.character.name);
                         pretty_print("Heroism: {}", gs);
-                        log_expedition_info(&*gs.character.name, gs.character.player_id, &server_host, active.current_floor, chosen_expedition_type.as_ref(), active.heroism as u32, &get_all_encounters_counts(&*gs.character.name));
+                        log_expedition_info(&*gs.character.name, gs.character.player_id, &server_host, "gold", active.current_floor, chosen_expedition_type.as_ref(), active.heroism as u32, &get_all_encounters_counts(&*gs.character.name));
                     }
 
                     Command::ExpeditionContinue

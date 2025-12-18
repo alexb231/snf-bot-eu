@@ -707,6 +707,11 @@ function formatNumber(num) {
 // ============================================================================
 
 let currentLogCharIndex = 0;
+let currentExpeditionStats = null;
+let currentExpeditionStatsFallback = null;
+let currentExpeditionStatsMode = 'all';
+let currentExpeditionSummary = null;
+let currentExpeditionSummaryMode = 'all';
 
 async function openCharacterLog(charId, charName) {
     // Find the index of this character in the sorted list
@@ -794,23 +799,26 @@ async function openExpeditionStats(charId, charName, charServer) {
             server: charServer || ''
         });
 
-        renderExpeditionStats(result?.stats, {
+        currentExpeditionStats = result?.stats || null;
+        currentExpeditionStatsFallback = {
             name: charName,
             id: charId,
             server: charServer || ''
-        });
+        };
+        setExpeditionStatsMode(currentExpeditionStatsMode);
     } catch (e) {
         content.textContent = 'Fehler beim Laden: ' + e.message;
     }
 }
 
-function renderExpeditionStats(stats, fallback) {
+function renderExpeditionStats(stats, fallback, mode) {
     const summary = document.getElementById('expedition-stats-summary');
     const content = document.getElementById('expedition-stats-content');
     summary.innerHTML = '';
     content.innerHTML = '';
 
-    if (!stats || !stats.expeditions || Object.keys(stats.expeditions).length === 0) {
+    const expeditions = extractModeExpeditions(stats, mode);
+    if (!expeditions || Object.keys(expeditions).length === 0) {
         content.textContent = t('expeditionStats.noData');
         content.classList.add('expedition-stats-empty');
         return;
@@ -818,7 +826,7 @@ function renderExpeditionStats(stats, fallback) {
 
     content.classList.remove('expedition-stats-empty');
 
-    const expeditionEntries = Object.entries(stats.expeditions);
+    const expeditionEntries = Object.entries(expeditions);
     expeditionEntries.sort((a, b) => (b[1]?.picked || 0) - (a[1]?.picked || 0));
 
     let totalRuns = 0;
@@ -1003,6 +1011,25 @@ function formatExpeditionName(name) {
     return formatEncounterName(name);
 }
 
+function extractModeExpeditions(stats, mode) {
+    if (!stats) return {};
+    if (!mode || mode === 'all') return stats.expeditions || {};
+    return stats.modes?.[mode]?.expeditions || {};
+}
+
+function setExpeditionStatsMode(mode) {
+    currentExpeditionStatsMode = mode || 'all';
+    const toggle = document.getElementById('expedition-stats-toggle');
+    if (toggle) {
+        toggle.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === currentExpeditionStatsMode);
+        });
+    }
+    if (currentExpeditionStats) {
+        renderExpeditionStats(currentExpeditionStats, currentExpeditionStatsFallback, currentExpeditionStatsMode);
+    }
+}
+
 function setupExpeditionStatsModal() {
     document.getElementById('close-expedition-stats').addEventListener('click', () => {
         document.getElementById('expedition-stats-modal').classList.remove('active');
@@ -1011,6 +1038,15 @@ function setupExpeditionStatsModal() {
     document.getElementById('expedition-stats-close').addEventListener('click', () => {
         document.getElementById('expedition-stats-modal').classList.remove('active');
     });
+
+    const toggle = document.getElementById('expedition-stats-toggle');
+    if (toggle) {
+        toggle.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                setExpeditionStatsMode(btn.dataset.mode);
+            });
+        });
+    }
 }
 
 // ============================================================================
@@ -1027,16 +1063,18 @@ async function openExpeditionSummary() {
 
     try {
         const result = await invoke('get_expedition_summary');
-        renderExpeditionSummary(result?.expeditions || {});
+        currentExpeditionSummary = result || null;
+        setExpeditionSummaryMode(currentExpeditionSummaryMode);
     } catch (e) {
         content.textContent = 'Fehler beim Laden: ' + e.message;
     }
 }
 
-function renderExpeditionSummary(expeditions) {
+function renderExpeditionSummary(summaryData, mode) {
     const content = document.getElementById('expedition-summary-content');
     content.innerHTML = '';
 
+    const expeditions = extractSummaryMode(summaryData, mode);
     const entries = Object.entries(expeditions || {});
     if (entries.length === 0) {
         content.textContent = t('expeditionSummary.noData');
@@ -1096,6 +1134,34 @@ function setupExpeditionSummaryModal() {
     document.getElementById('expedition-summary-close').addEventListener('click', () => {
         document.getElementById('expedition-summary-modal').classList.remove('active');
     });
+
+    const toggle = document.getElementById('expedition-summary-toggle');
+    if (toggle) {
+        toggle.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                setExpeditionSummaryMode(btn.dataset.mode);
+            });
+        });
+    }
+}
+
+function extractSummaryMode(summaryData, mode) {
+    if (!summaryData) return {};
+    if (!mode || mode === 'all') return summaryData.expeditions || {};
+    return summaryData.modes?.[mode]?.expeditions || {};
+}
+
+function setExpeditionSummaryMode(mode) {
+    currentExpeditionSummaryMode = mode || 'all';
+    const toggle = document.getElementById('expedition-summary-toggle');
+    if (toggle) {
+        toggle.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === currentExpeditionSummaryMode);
+        });
+    }
+    if (currentExpeditionSummary) {
+        renderExpeditionSummary(currentExpeditionSummary, currentExpeditionSummaryMode);
+    }
 }
 
 // ============================================================================

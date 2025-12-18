@@ -23,6 +23,10 @@ pub async fn fight_dungeon_with_highest_win_rate(session: &mut SimpleSession) ->
     let dungeonSkipTwister: bool = fetch_character_setting(&gs, "dungeonSkipTwister").unwrap_or(false);
     let dungeonSkipTower: bool = fetch_character_setting(&gs, "dungeonSkipTower").unwrap_or(false);
     let dungeonSkipSandstorm: bool = fetch_character_setting(&gs, "dungeonSkipSandstorm").unwrap_or(false);
+    let dungeonCheckbox: bool = fetch_character_setting(&gs, "dungeonCheckbox").unwrap_or(false);
+    if(dungeonCheckbox == false) {
+        return Ok(String::from(""));
+    }
 
     use std::collections::HashSet;
 
