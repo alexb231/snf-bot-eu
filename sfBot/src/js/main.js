@@ -1,0 +1,1252 @@
+/**
+ * SF Bot Modern UI - Main JavaScript
+ */
+
+// ============================================================================
+// State
+// ============================================================================
+
+const state = {
+    running: false,
+    paused: false,
+    accounts: [],
+    characters: [],
+    pendingActiveOverrides: {}, // key: `${id}_${name}` -> bool
+    startTime: null,
+    uptimeInterval: null,
+    refreshInterval: null,
+    currentCharacter: null,
+    currentCharacterSettings: null,
+    accountFilter: '' // Empty string = show all, otherwise filter by account name
+};
+
+const REFRESH_INTERVAL = 5000;
+
+// Priority lists (with defaults)
+let expeditionPriorityList = [
+    "Mushrooms", "Gold", "Wood", "Stone", "Arcane Splinter",
+    "Metal", "Souls", "Pet Egg", "Quicksand Glasses", "Fruit Basket", "Lucky coins"
+];
+
+let dicePriorityList = [
+    "Gold", "HourGlass", "Reroll", "Souls", "Arcane Splinter", "Wood", "Stone"
+];
+
+// ============================================================================
+// Initialization
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('SF Bot UI initializing...');
+
+    // Check server connection
+    const connected = await checkServerConnection();
+    if (!connected) {
+        showLog('Server nicht erreichbar. Bitte Backend starten.', 'error');
+    }
+
+    // Load version
+    await loadVersion();
+
+    // Load accounts
+    await loadAccounts();
+
+    // Load cached characters (so they appear before bot starts)
+    await loadCachedCharacters();
+
+    // Setup event handlers
+    setupNavigation();
+    setupBotControls();
+    setupLoginForm();
+    setupModals();
+    setupLogModal();
+    setupSettingsNavigation();
+
+    // Start refresh interval
+    startRefreshInterval();
+
+    // Hide loading overlay
+    document.getElementById('loading-overlay').classList.add('hidden');
+
+    console.log('SF Bot UI initialized');
+});
+
+// ============================================================================
+// Server Connection
+// ============================================================================
+
+async function checkServerConnection() {
+    try {
+        const response = await fetch('http://localhost:3000/api/version');
+        return response.ok;
+    } catch (e) {
+        console.error('Server not reachable:', e);
+        return false;
+    }
+}
+
+async function loadVersion() {
+    try {
+        const result = await invoke('get_app_version');
+        document.getElementById('version').textContent = `v${result}`;
+    } catch (e) {
+        console.error('Failed to load version:', e);
+    }
+}
+
+// ============================================================================
+// Navigation
+// ============================================================================
+
+function setupNavigation() {
+    const navBtns = document.querySelectorAll('.nav-btn');
+    const views = document.querySelectorAll('.view');
+    const viewTitle = document.getElementById('view-title');
+
+    const viewTitles = {
+        'dashboard': 'Dashboard',
+        'accounts': 'Accounts',
+        'logs': 'Logs'
+    };
+
+    navBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const viewId = btn.dataset.view;
+
+            // Update nav buttons
+            navBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Update views
+            views.forEach(v => v.classList.remove('active'));
+            document.getElementById(`view-${viewId}`).classList.add('active');
+
+            // Update title
+            viewTitle.textContent = viewTitles[viewId] || viewId;
+
+            // Reset account filter when clicking Dashboard
+            if (viewId === 'dashboard') {
+                setAccountFilter('');
+            }
+        });
+    });
+}
+
+// ============================================================================
+// Bot Controls
+// ============================================================================
+
+function setupBotControls() {
+    document.getElementById('btn-start').addEventListener('click', startBot);
+    document.getElementById('btn-stop').addEventListener('click', stopBot);
+    document.getElementById('btn-pause').addEventListener('click', togglePause);
+    document.getElementById('btn-refresh').addEventListener('click', refreshData);
+    document.getElementById('btn-shutdown').addEventListener('click', shutdownServer);
+}
+
+async function shutdownServer() {
+    if (confirm('Server wirklich beenden? Der Bot wird gestoppt und die Anwendung geschlossen.')) {
+        try {
+            showLog('Server wird beendet...', 'info');
+            await window.sfBotApi.shutdownServer();
+        } catch (e) {
+            // Server ist bereits beendet, daher Fehler erwartet
+        }
+    }
+}
+
+async function startBot() {
+    if (state.accounts.length === 0) {
+        showLog('Keine Accounts vorhanden. Bitte zuerst Account hinzufuegen.', 'error');
+        return;
+    }
+
+    try {
+        showLog('Bot wird gestartet...', 'info');
+
+        const accountsToStart = state.accounts.map(acc => ({
+            accname: acc.accname,
+            password: acc.password,
+            single: acc.single || false,
+            server: acc.server || ''
+        }));
+
+        await window.sfBotApi.startBot(accountsToStart);
+
+        state.running = true;
+        state.paused = false;
+        state.startTime = Date.now();
+
+        updateBotUI();
+        startUptimeTimer();
+        showLog('Bot gestartet', 'success');
+
+    } catch (e) {
+        console.error('Failed to start bot:', e);
+        showLog('Bot konnte nicht gestartet werden: ' + e.message, 'error');
+    }
+}
+
+async function stopBot() {
+    try {
+        showLog('Bot wird gestoppt...', 'info');
+
+        await window.sfBotApi.stopBot();
+
+        state.running = false;
+        state.paused = false;
+        state.startTime = null;
+
+        updateBotUI();
+        stopUptimeTimer();
+        showLog('Bot gestoppt', 'success');
+
+    } catch (e) {
+        console.error('Failed to stop bot:', e);
+        showLog('Fehler beim Stoppen: ' + e.message, 'error');
+    }
+}
+
+async function togglePause() {
+    try {
+        if (state.paused) {
+            await window.sfBotApi.resumeBot();
+            state.paused = false;
+            showLog('Bot fortgesetzt', 'info');
+        } else {
+            await window.sfBotApi.pauseBot();
+            state.paused = true;
+            showLog('Bot pausiert', 'info');
+        }
+        updateBotUI();
+    } catch (e) {
+        console.error('Failed to toggle pause:', e);
+    }
+}
+
+function updateBotUI() {
+    const statusEl = document.getElementById('bot-status');
+    const statusText = statusEl.querySelector('.status-text');
+    const startBtn = document.getElementById('btn-start');
+    const stopBtn = document.getElementById('btn-stop');
+    const pauseBtn = document.getElementById('btn-pause');
+
+    // Update status indicator
+    statusEl.classList.remove('running', 'paused');
+    if (state.running) {
+        statusEl.classList.add(state.paused ? 'paused' : 'running');
+        statusText.textContent = state.paused ? t('header.paused') : t('header.running');
+    } else {
+        statusText.textContent = t('header.stopped');
+    }
+
+    // Update buttons
+    startBtn.disabled = state.running;
+    stopBtn.disabled = !state.running;
+    pauseBtn.disabled = !state.running;
+
+    // Update pause button text
+    const pauseBtnTextEl = pauseBtn.querySelector('svg');
+    if (pauseBtnTextEl && pauseBtnTextEl.nextSibling) {
+        pauseBtnTextEl.nextSibling.textContent = ' ' + (state.paused ? t('header.resume') : t('header.pause'));
+    }
+
+    // Update current action
+    const actionEl = document.getElementById('current-action');
+    if (!state.running) {
+        actionEl.textContent = t('dashboard.botNotStarted');
+    } else if (state.paused) {
+        actionEl.textContent = t('dashboard.botPaused');
+    }
+}
+
+// ============================================================================
+// Uptime Timer
+// ============================================================================
+
+function startUptimeTimer() {
+    stopUptimeTimer();
+    state.uptimeInterval = setInterval(updateUptime, 1000);
+}
+
+function stopUptimeTimer() {
+    if (state.uptimeInterval) {
+        clearInterval(state.uptimeInterval);
+        state.uptimeInterval = null;
+    }
+    document.getElementById('stat-uptime').textContent = '00:00:00';
+}
+
+function updateUptime() {
+    if (!state.startTime) return;
+
+    const elapsed = Date.now() - state.startTime;
+    const hours = Math.floor(elapsed / 3600000);
+    const minutes = Math.floor((elapsed % 3600000) / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+
+    document.getElementById('stat-uptime').textContent =
+        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+// ============================================================================
+// Data Refresh
+// ============================================================================
+
+function startRefreshInterval() {
+    state.refreshInterval = setInterval(refreshBotStatus, REFRESH_INTERVAL);
+}
+
+async function refreshData() {
+    await refreshBotStatus();
+    showLog(t('dashboard.dataRefreshed'), 'info');
+}
+
+async function refreshBotStatus() {
+    try {
+        const status = await window.sfBotApi.getBotStatus();
+
+        state.running = status.running;
+        state.paused = status.paused;
+
+        updateBotUI();
+
+        // Update current action
+        if (status.current_character) {
+            const cc = status.current_character;
+            document.getElementById('current-action').textContent = `${cc.name}: ${cc.current_action}`;
+        } else if (state.running) {
+            document.getElementById('current-action').textContent = t('dashboard.waitingForAction');
+        }
+
+        // Update characters from status - merge with cached inactive characters
+        if (status.characters && status.characters.length > 0) {
+            // Map existing cached characters for enrichment
+            const cachedMap = new Map(
+                state.characters
+                    .filter(c => c.cached)
+                    .map(c => [`${c.id}_${c.server}`, c])
+            );
+
+            // Active/status characters enriched with cached details if available
+            const activeChars = status.characters.map(c => {
+                const key = `${c.id}_${c.server}`;
+                const cached = cachedMap.get(key);
+                return {
+                    ...c,
+                    cached: false,
+                    mount: cached?.mount || c.mount || '-',
+                    luckycoins: cached?.luckycoins ?? c.luckycoins ?? 0,
+                    hourglasses: cached?.hourglasses ?? c.hourglasses ?? 0,
+                    beers: c.beers ?? cached?.beers ?? 0,
+                    mushrooms: c.mushrooms ?? cached?.mushrooms ?? 0,
+                    gold: c.gold ?? cached?.gold ?? 0,
+                };
+            });
+
+            const activeIds = new Set(activeChars.map(c => `${c.id}_${c.server}`));
+
+            // Cached characters not present in active list (regardless of isActive) stay in the UI
+            const cachedMissing = Array.from(cachedMap.values()).filter(c => !activeIds.has(`${c.id}_${c.server}`));
+
+            state.characters = [...activeChars, ...cachedMissing];
+            // Apply pending overrides for isActive
+            state.characters = state.characters.map(c => {
+                const key = `${c.id}_${c.name}`;
+                if (state.pendingActiveOverrides.hasOwnProperty(key)) {
+                    return { ...c, isActive: state.pendingActiveOverrides[key] };
+                }
+                return c;
+            });
+            updateAccountSubmenu();
+            renderCharactersTable();
+        }
+
+        // Update stats
+        document.getElementById('stat-accounts').textContent = state.accounts.length;
+
+    } catch (e) {
+        console.error('Failed to refresh status:', e);
+    }
+}
+
+// ============================================================================
+// Accounts
+// ============================================================================
+
+async function loadAccounts() {
+    try {
+        state.accounts = await invoke('read_user_conf') || [];
+        renderAccountsList();
+        document.getElementById('stat-accounts').textContent = state.accounts.length;
+
+        if (state.accounts.length > 0) {
+            showLog(`${state.accounts.length} Account(s) geladen`, 'info');
+        }
+    } catch (e) {
+        console.error('Failed to load accounts:', e);
+    }
+}
+
+/**
+ * Load cached characters from the server
+ * This allows displaying characters before the bot is started
+ */
+async function loadCachedCharacters() {
+    try {
+        const result = await window.sfBotApi.getCachedCharacters();
+
+        if (result.characters && result.characters.length > 0) {
+            // Map cached characters to the format expected by the UI
+            state.characters = result.characters.map(c => ({
+                id: c.id,
+                name: c.name,
+                lvl: c.lvl,
+                alu: c.alu,
+                guild: c.guild,
+                beers: c.beers,
+                mushrooms: c.mushrooms,
+                hourglasses: c.hourglasses,
+                gold: c.gold,
+                luckycoins: c.luckycoins,
+                fights: c.fights,
+                luckyspins: c.luckyspins,
+                petfights: c.petfights,
+                dicerolls: c.dicerolls,
+                server: c.server,
+                isActive: c.isActive,
+                mount: c.mount,
+                account: c.account,
+                cached: true,
+                cachedAt: c.cached_at
+            }));
+
+            renderCharactersTable();
+            document.getElementById('stat-characters').textContent = state.characters.length;
+            showLog(t('log.charsLoadedFromCache').replace('{count}', state.characters.length), 'info');
+        }
+    } catch (e) {
+        console.error('Failed to load cached characters:', e);
+        // Not an error - just means no cache exists yet
+    }
+}
+
+function renderAccountsList() {
+    const container = document.getElementById('accounts-list');
+
+    if (state.accounts.length === 0) {
+        container.innerHTML = '<div class="empty-state">Keine Accounts gespeichert</div>';
+        return;
+    }
+
+    container.innerHTML = state.accounts.map(acc => `
+        <div class="account-item">
+            <span class="account-name">${acc.accname}</span>
+            <span class="account-type">${acc.single ? 'Single' : 'SSO'}</span>
+        </div>
+    `).join('');
+}
+
+function setupLoginForm() {
+    const form = document.getElementById('login-form');
+    const singleCheckbox = document.getElementById('input-single');
+    const serverGroup = document.getElementById('server-group');
+
+    // Toggle server input
+    singleCheckbox.addEventListener('change', () => {
+        serverGroup.style.display = singleCheckbox.checked ? 'block' : 'none';
+    });
+
+    // Handle form submit
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const username = document.getElementById('input-username').value;
+        const password = document.getElementById('input-password').value;
+        const isSingle = document.getElementById('input-single').checked;
+        const server = document.getElementById('input-server').value;
+
+        if (!username || !password) {
+            showLog('Bitte Benutzername und Passwort eingeben', 'error');
+            return;
+        }
+
+        if (isSingle && !server) {
+            showLog('Bitte Server-URL eingeben', 'error');
+            return;
+        }
+
+        try {
+            showLog(`Login ${username}...`, 'info');
+
+            // Save to config
+            await invoke('save_user_conf', {
+                accname: username,
+                password: password,
+                single: isSingle,
+                server: server || ''
+            });
+
+            // Reload accounts
+            await loadAccounts();
+
+            // Clear form
+            form.reset();
+            serverGroup.style.display = 'none';
+
+            showLog(`Account ${username} hinzugefuegt`, 'success');
+
+        } catch (e) {
+            console.error('Failed to add account:', e);
+            showLog('Fehler beim Hinzufuegen: ' + e.message, 'error');
+        }
+    });
+}
+
+// ============================================================================
+// Account Submenu
+// ============================================================================
+
+function updateAccountSubmenu() {
+    const submenu = document.getElementById('account-submenu');
+    if (!submenu) return;
+
+    // Get unique account names from characters
+    const accounts = [...new Set(state.characters.map(c => c.account).filter(a => a))];
+
+    if (accounts.length === 0) {
+        submenu.innerHTML = '';
+        return;
+    }
+
+    submenu.innerHTML = accounts.map(acc => `
+        <button class="account-submenu-btn ${state.accountFilter === acc ? 'active' : ''}" data-account="${acc}">
+            ${acc}
+        </button>
+    `).join('');
+
+    // Add click handlers
+    submenu.querySelectorAll('.account-submenu-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const account = e.target.dataset.account;
+            setAccountFilter(account);
+        });
+    });
+}
+
+function setAccountFilter(account) {
+    state.accountFilter = account;
+
+    // Update active states
+    const dashboardBtn = document.querySelector('.nav-btn[data-view="dashboard"]');
+    const submenuBtns = document.querySelectorAll('.account-submenu-btn');
+
+    // Dashboard button is active only when no filter
+    if (account === '') {
+        dashboardBtn.classList.add('active');
+    } else {
+        dashboardBtn.classList.remove('active');
+    }
+
+    // Update submenu button states
+    submenuBtns.forEach(btn => {
+        if (btn.dataset.account === account) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Re-render table
+    renderCharactersTable();
+}
+
+// ============================================================================
+// Characters Table
+// ============================================================================
+
+function renderCharactersTable() {
+    const tbody = document.getElementById('character-list');
+
+    // Filter characters by account if filter is set
+    let displayCharacters = state.characters;
+    if (state.accountFilter) {
+        displayCharacters = state.characters.filter(c => c.account === state.accountFilter);
+    }
+
+    if (displayCharacters.length === 0) {
+        tbody.innerHTML = `
+            <tr class="empty-row">
+                <td colspan="10">${state.accountFilter ? 'Keine Charaktere fuer diesen Account.' : 'Keine Charaktere geladen. Bitte Account hinzufuegen und Bot starten.'}</td>
+            </tr>
+        `;
+        return;
+    }
+
+    // Sort characters by ID to keep them in stable order
+    const sortedCharacters = [...displayCharacters].sort((a, b) => a.id - b.id);
+
+    tbody.innerHTML = sortedCharacters.map(char => {
+        // Single accounts have server set, normal accounts don't - show dash for normal accounts
+        const serverDisplay = char.server ? char.server : '-';
+        return `
+        <tr>
+            <td><input type="checkbox" class="char-active-toggle" data-char-id="${char.id}" data-char-name="${char.name}" ${char.isActive ? 'checked' : ''}></td>
+            <td>${char.name}</td>
+            <td>${char.lvl || '-'}</td>
+            <td>${serverDisplay}</td>
+            <td>${formatNumber(char.gold || 0)}</td>
+            <td>${char.mushrooms || 0}</td>
+            <td>${char.luckycoins ?? 0}</td>
+            <td>${char.hourglasses ?? 0}</td>
+            <td>${char.mount || '-'}</td>
+            <td>${char.beers || 0}/11</td>
+            <td>${char.fights || 0}/10</td>
+            <td>${char.alu || 0}</td>
+            <td>
+                <button class="char-log-btn" data-char-id="${char.id}" data-char-name="${char.name}">${t('table.log')}</button>
+                <button class="char-settings-btn" data-char-id="${char.id}" data-char-name="${char.name}">${t('table.settings')}</button>
+            </td>
+        </tr>
+    `}).join('');
+
+    // Update stats
+    document.getElementById('stat-characters').textContent = state.characters.length;
+    document.getElementById('stat-active').textContent = state.characters.filter(c => c.isActive).length;
+
+    // Add event listeners
+    tbody.querySelectorAll('.char-active-toggle').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const charId = parseInt(e.target.dataset.charId);
+            const charName = e.target.dataset.charName;
+            toggleCharacterActive(charId, charName, e.target.checked);
+        });
+    });
+
+    tbody.querySelectorAll('.char-settings-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const charId = parseInt(e.target.dataset.charId);
+            const charName = e.target.dataset.charName;
+            openCharacterSettings(charId, charName);
+        });
+    });
+
+    tbody.querySelectorAll('.char-log-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const charId = parseInt(e.target.dataset.charId);
+            const charName = e.target.dataset.charName;
+            openCharacterLog(charId, charName);
+        });
+    });
+}
+
+async function toggleCharacterActive(charId, charName, isActive) {
+    try {
+        const settings = await invoke('load_character_settings', {
+            charactername: charName,
+            characterid: charId
+        }) || {};
+
+        settings.settingCharacterActive = isActive;
+
+        await invoke('save_character_settings', {
+            charactername: charName,
+            characterid: charId,
+            settings: settings
+        });
+
+        // Remember override locally so the next refresh keeps the checkbox state immediately
+        const overrideKey = `${charId}_${charName}`;
+        state.pendingActiveOverrides[overrideKey] = isActive;
+
+        // Update local list right away for snappier UI
+        const idx = state.characters.findIndex(c => c.id === charId && c.name === charName);
+        if (idx !== -1) {
+            state.characters[idx] = { ...state.characters[idx], isActive };
+            renderCharactersTable();
+        }
+
+        showLog(`${charName}: ${isActive ? 'Aktiviert' : 'Deaktiviert'}`, 'info');
+
+    } catch (e) {
+        console.error('Failed to toggle character active:', e);
+    }
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num;
+}
+
+// ============================================================================
+// Character Log Modal
+// ============================================================================
+
+let currentLogCharIndex = 0;
+
+async function openCharacterLog(charId, charName) {
+    // Find the index of this character in the sorted list
+    const sortedCharacters = [...state.characters].sort((a, b) => a.id - b.id);
+    currentLogCharIndex = sortedCharacters.findIndex(c => c.id === charId);
+
+    await loadAndDisplayLog(charName, charId);
+    document.getElementById('character-log-modal').classList.add('active');
+}
+
+async function loadAndDisplayLog(charName, charId) {
+    const logContent = document.getElementById('character-log-content');
+    const title = document.getElementById('log-modal-title');
+
+    title.textContent = `Log: ${charName}`;
+    logContent.textContent = 'Lade...';
+
+    try {
+        const result = await invoke('get_character_log', { name: charName, id: charId });
+        if (result.error) {
+            logContent.textContent = result.error;
+        } else {
+            logContent.textContent = result.log || 'Keine Logs vorhanden';
+        }
+        // Scroll to bottom after content is rendered
+        requestAnimationFrame(() => {
+            logContent.scrollTop = logContent.scrollHeight;
+        });
+    } catch (e) {
+        logContent.textContent = 'Fehler beim Laden: ' + e.message;
+    }
+}
+
+function navigateLogCharacter(direction) {
+    const sortedCharacters = [...state.characters].sort((a, b) => a.id - b.id);
+    if (sortedCharacters.length === 0) return;
+
+    currentLogCharIndex += direction;
+    if (currentLogCharIndex < 0) currentLogCharIndex = sortedCharacters.length - 1;
+    if (currentLogCharIndex >= sortedCharacters.length) currentLogCharIndex = 0;
+
+    const char = sortedCharacters[currentLogCharIndex];
+    loadAndDisplayLog(char.name, char.id);
+}
+
+function setupLogModal() {
+    document.getElementById('close-char-log').addEventListener('click', () => {
+        document.getElementById('character-log-modal').classList.remove('active');
+    });
+
+    document.getElementById('log-close').addEventListener('click', () => {
+        document.getElementById('character-log-modal').classList.remove('active');
+    });
+
+    document.getElementById('log-prev-char').addEventListener('click', () => {
+        navigateLogCharacter(-1);
+    });
+
+    document.getElementById('log-next-char').addEventListener('click', () => {
+        navigateLogCharacter(1);
+    });
+}
+
+// ============================================================================
+// Modals
+// ============================================================================
+
+let modalsSetup = false;
+
+function setupModals() {
+    // Prevent multiple setup calls
+    if (modalsSetup) {
+        console.warn('setupModals already called, skipping');
+        return;
+    }
+    modalsSetup = true;
+
+    // Global settings modal
+    document.getElementById('btn-bot-settings').addEventListener('click', () => {
+        document.getElementById('global-settings-modal').classList.add('active');
+        loadGlobalSettings();
+    });
+
+    document.getElementById('close-global-settings').addEventListener('click', () => {
+        document.getElementById('global-settings-modal').classList.remove('active');
+    });
+
+    document.getElementById('cancel-global-settings').addEventListener('click', () => {
+        document.getElementById('global-settings-modal').classList.remove('active');
+    });
+
+    document.getElementById('save-global-settings').addEventListener('click', saveGlobalSettings);
+
+    // Character settings modal
+    document.getElementById('close-char-settings').addEventListener('click', () => {
+        document.getElementById('character-settings-modal').classList.remove('active');
+    });
+
+    document.getElementById('cancel-char-settings').addEventListener('click', () => {
+        document.getElementById('character-settings-modal').classList.remove('active');
+    });
+
+    // Use onclick instead of addEventListener to ensure only one handler
+    document.getElementById('save-char-settings').onclick = saveCharacterSettings;
+
+    // Copy settings when source is selected
+    const copySelect = document.getElementById('copy-settings-select');
+    if (copySelect) copySelect.onchange = copySettingsFromSelect;
+
+    // Close modals on backdrop click
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+    });
+}
+
+// ============================================================================
+// Global Settings
+// ============================================================================
+
+async function loadGlobalSettings() {
+    try {
+        const settings = await invoke('get_global_settings') || {};
+
+        document.getElementById('global-auto-start').checked = settings.globalLaunchOnStart || false;
+        document.getElementById('global-sleep-min').value = settings.globalSleepTimesMin || 50;
+        document.getElementById('global-sleep-max').value = settings.globalSleepTimesMax || 100;
+        document.getElementById('global-dont-relog-seconds').value = settings.doNotRelogCharacterSeconds || 3;
+
+    } catch (e) {
+        console.error('Failed to load global settings:', e);
+    }
+}
+
+async function saveGlobalSettings() {
+    try {
+        const settings = {
+            globalLaunchOnStart: document.getElementById('global-auto-start').checked,
+            globalSleepTimesMin: parseInt(document.getElementById('global-sleep-min').value) || 50,
+            globalSleepTimesMax: parseInt(document.getElementById('global-sleep-max').value) || 100,
+            doNotRelogCharacterSeconds: parseInt(document.getElementById('global-dont-relog-seconds').value) || 3
+        };
+
+        await invoke('save_global_settings', { settings });
+
+        document.getElementById('global-settings-modal').classList.remove('active');
+        showLog(t('log.settingsSaved'), 'success');
+
+    } catch (e) {
+        console.error('Failed to save global settings:', e);
+        showLog(t('log.saveError'), 'error');
+    }
+}
+
+// ============================================================================
+// Character Settings
+// ============================================================================
+
+function setupSettingsNavigation() {
+    const navBtns = document.querySelectorAll('.settings-nav-btn');
+    const sections = document.querySelectorAll('.settings-section');
+
+    navBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sectionId = btn.dataset.section;
+
+            navBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            sections.forEach(s => s.classList.remove('active'));
+            document.getElementById(`section-${sectionId}`).classList.add('active');
+        });
+    });
+
+    // Initialize priority lists
+    renderPriorityList('expedition-priority-list', expeditionPriorityList);
+    renderPriorityList('dice-priority-list', dicePriorityList);
+}
+
+async function openCharacterSettings(charId, charName) {
+    state.currentCharacter = { id: charId, name: charName };
+
+    document.getElementById('settings-char-name').textContent = charName;
+    document.getElementById('settings-char-id').textContent = `ID: ${charId}`;
+    populateCopySettingsOptions(charId, charName);
+
+    // Reset to first section
+    document.querySelectorAll('.settings-nav-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === 0);
+    });
+    document.querySelectorAll('.settings-section').forEach((section, i) => {
+        section.classList.toggle('active', i === 0);
+    });
+
+    // Load settings
+    try {
+        console.log('Loading settings for:', charName, charId);
+        const settings = await invoke('load_character_settings', {
+            charactername: charName,
+            characterid: charId
+        }) || {};
+
+        console.log('Loaded settings:', settings);
+        state.currentCharacterSettings = settings;
+        populateCharacterSettings(settings);
+
+    } catch (e) {
+        console.error('Failed to load character settings:', e);
+        state.currentCharacterSettings = {};
+    }
+
+    document.getElementById('character-settings-modal').classList.add('active');
+}
+
+function populateCopySettingsOptions(currentId, currentName) {
+    const select = document.getElementById('copy-settings-select');
+    if (!select) return;
+    select.innerHTML = `<option value="">${t('charSettings.copyPlaceholder')}</option>`;
+
+    state.characters
+        .filter(c => !(c.id === currentId && c.name === currentName))
+        .forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = `${c.id}::${c.name}`;
+            opt.textContent = `${c.name} (ID: ${c.id})`;
+            select.appendChild(opt);
+        });
+}
+
+function populateCharacterSettings(settings) {
+    // This maps all the setting IDs to their values
+    const checkboxes = [
+        'settingCharacterActive',
+        'tavernPlayExpeditions', 'tavernSkipWithHourglasses', 'tavernPlayCityGuard',
+        'tavernPlayDiceGame', 'tavernDiceGameSkipUsingHG',
+        'itemsCheckbox', 'itemsInventoryMinGoldSavedIgnoreGemMine', 'itemsDoNotSellEpics',
+        'itemsImmediatelyThrowIntoCauldron', 'itemsImmediatelyThrowIntoCauldronExceptEpics',
+        'witchEnchantItemWeapon', 'witchEnchantItemHat', 'witchEnchantItemChest',
+        'witchEnchantItemGloves', 'witchEnchantItemBoots', 'witchEnchantItemNecklace',
+        'witchEnchantItemBelt', 'witchEnchantItemRing', 'witchEnchantItemTalisman',
+        'itemsPotionsWingedBuy', 'itemsPotionsStrSmallBuy', 'itemsPotionsStrMediumBuy', 'itemsPotionsStrLargeBuy',
+        'itemsPotionsDexSmallBuy', 'itemsPotionsDexMediumBuy', 'itemsPotionsDexLargeBuy',
+        'itemsPotionsIntSmallBuy', 'itemsPotionsIntMediumBuy', 'itemsPotionsIntLargeBuy',
+        'itemsPotionsConstSmallBuy', 'itemsPotionsConstMediumBuy', 'itemsPotionsConstLargeBuy',
+        'itemsPotionsLuckSmallBuy', 'itemsPotionsLuckMediumBuy', 'itemsPotionsLuckLargeBuy',
+        'itemsMagicShopBuyHourglasses', 'itemsBrewPotionsUsingFruits', 'itemsEnableEquipmentSwap',
+        'arenaCheckbox', 'arenaStopWhenDone', 'arenaFillScrapbook',
+        'quartersOrderAtk', 'quartersSignUpGuildAtks', 'quartersSignUpGuildDef', 'quartersSignUpHydra',
+        'quarterFightDungeonPortal', 'quartersCollectMailRewards', 'quartersSpinLuckyWheel',
+        'quartersDoPlayHellevator', 'quartersHellevatorClaimReward', 'quartersHellevatorClaimRewardFinal', 'quartersHellevatorJoinRaid',
+        'collectWood', 'collectStone', 'collectExp', 'fortessSearchForGems', 'fortressDoAttacks',
+        'fortessTrainSoldiers', 'fortessTrainMages', 'fortessTrainArchers', 'fortessUpgradeOurOrder',
+        'underworldCollectSouls', 'underworldCollectGold', 'underworldCollectThirst',
+        'underworldUpgradeBuildings', 'underworldUpgradeKeeper', 'underworldPerformAttacks', 'underWorldAttackFavouriteOpponent',
+        'characterIncreaseStatAttributes', 'enableBuyingMount',
+        'petsDoFights', 'petsDoDungeons', 'petsDoFeed',
+        'miscCollectCalendar', 'miscCollectCalendarExpOnly', 'miscCollectCalendarMushroomsCalendar',
+        'miscCollectDailyRewards', 'miscCollectWeeklyRewards',
+        'miscPerformDailyGambling', 'miscPerformDailyBareHand',
+        'miscPerformDailyFightWarrior', 'miscPerformDailyFightScout', 'miscPerformDailyFightMage',
+        'miscPerformDailyFightAssassin', 'miscPerformDailyFightBattleMage', 'miscPerformDailyFightBerserker',
+        'miscPerformDailyFightDruid', 'miscPerformDailyFightDemonHunter', 'miscPerformDailyFightBard',
+        'miscPerformDailyFightNecromancer', 'miscPerformDailyFightPaladin',
+        'dungeonCheckbox', 'dungeonFightDemonPortal', 'dungeonFightLowestLevel',
+        'dungeonSkipIdols', 'dungeonSkipTwister', 'dungeonSkipTower', 'dungeonSkipSandstorm',
+        'arenaManagerActive',
+        'toiletEnableToilet', 'toiletFlushWhenFull', 'toiletSacrificeEpics', 'toiletExcludeEpicWeapons',
+        'toiletSacrificeGems', 'toiletSacrificeNormalItems'
+    ];
+
+    checkboxes.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.checked = settings[id] || false;
+    });
+
+    // Number inputs
+    const numbers = [
+        'tavernDrinkBeerAmount', 'tavernCityGuardTimeToPlay',
+        'itemsInventoryMinGoldSaved', 'itemsInventoryMinMushroomsSaved', 'itemsInventorySlotsToBeLeft', 'itemsKeepGemPercent',
+        'quartersSpinLuckyWithResourcesAmount', 'quartersHellevatorKeyCardsKeep', 'quartersHellevatorJoinRaidFloor',
+        'fortressAdditionalSoldierPercent',
+        'underworldUpgradeKeeperSoulsToKeep',
+        'characterStatDistributionStr', 'characterStatDistributionDex', 'characterStatDistributionInt',
+        'characterStatDistributionConst', 'characterStatDistributionLuck',
+        'petsToFeedPerDay', 'arenaManagerSacrificeAfterPercent'
+    ];
+
+    numbers.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = settings[id] || '';
+    });
+
+    // Time inputs
+    const times = [
+        'tavernPlayExpeditionFrom', 'tavernPlayCityGuardFrom', 'tavernPlayCityGuardTo',
+        'quartersOrderAtkFavouriteEnemiesTimeFirst', 'quartersOrderAtkFavouriteEnemiesTimeSecond',
+        'fortressCollectTimeFrom', 'fortressCollectTimeTo',
+        'underworldDontCollectGoldFrom', 'underworldDontCollectGoldTo',
+        'miscDontCollectCalendarBefore', 'miscDontPerformActionsFrom', 'miscDontPerformActionsTo'
+    ];
+
+    times.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = settings[id] || '';
+    });
+
+    // Text inputs
+    const texts = [
+        'quartersOrderAtkFavouriteEnemies', 'underworldFavouriteOpponents'
+    ];
+
+    texts.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = settings[id] || '';
+    });
+
+    // Radio buttons
+    const radios = [
+        { name: 'tavernPlayExpExpedition', value: settings.tavernPlayExpExpedition },
+        { name: 'itemsInventoryFullSellOption', value: settings.itemsInventoryFullSellOption },
+        { name: 'itemsPotionsWinged', value: settings.itemsPotionsWinged },
+        { name: 'itemsPotionsStrSmall', value: settings.itemsPotionsStrSmall },
+        { name: 'itemsPotionsStrMedium', value: settings.itemsPotionsStrMedium },
+        { name: 'itemsPotionsStrLarge', value: settings.itemsPotionsStrLarge },
+        { name: 'itemsPotionsDexSmall', value: settings.itemsPotionsDexSmall },
+        { name: 'itemsPotionsDexMedium', value: settings.itemsPotionsDexMedium },
+        { name: 'itemsPotionsDexLarge', value: settings.itemsPotionsDexLarge },
+        { name: 'itemsPotionsIntSmall', value: settings.itemsPotionsIntSmall },
+        { name: 'itemsPotionsIntMedium', value: settings.itemsPotionsIntMedium },
+        { name: 'itemsPotionsIntLarge', value: settings.itemsPotionsIntLarge },
+        { name: 'itemsPotionsConstSmall', value: settings.itemsPotionsConstSmall },
+        { name: 'itemsPotionsConstMedium', value: settings.itemsPotionsConstMedium },
+        { name: 'itemsPotionsConstLarge', value: settings.itemsPotionsConstLarge },
+        { name: 'itemsPotionsLuckSmall', value: settings.itemsPotionsLuckSmall },
+        { name: 'itemsPotionsLuckMedium', value: settings.itemsPotionsLuckMedium },
+        { name: 'itemsPotionsLuckLarge', value: settings.itemsPotionsLuckLarge },
+        { name: 'itemsGemStrength', value: settings.itemsGemStrength },
+        { name: 'itemsGemDex', value: settings.itemsGemDex },
+        { name: 'itemsGemInt', value: settings.itemsGemInt },
+        { name: 'itemsGemConst', value: settings.itemsGemConst },
+        { name: 'itemsGemLuck', value: settings.itemsGemLuck },
+        { name: 'itemsGemBlack', value: settings.itemsGemBlack },
+        { name: 'itemsGemLegendary', value: settings.itemsGemLegendary },
+        { name: 'quartersSpinLuckyWithResources', value: settings.quartersSpinLuckyWithResources },
+        { name: 'fortressAttackMode', value: settings.fortressAttackMode },
+        { name: 'characterMount', value: settings.characterMount },
+        { name: 'petsFeedMode', value: settings.petsFeedMode }
+    ];
+
+    radios.forEach(({ name, value }) => {
+        if (value) {
+            const el = document.querySelector(`input[name="${name}"][value="${value}"]`);
+            if (el) el.checked = true;
+        }
+    });
+
+    // Priority lists
+    if (settings.expeditionRewardPrioList) {
+        expeditionPriorityList = settings.expeditionRewardPrioList;
+        renderPriorityList('expedition-priority-list', expeditionPriorityList);
+    }
+
+    if (settings.tavernDiceGameRewardOrder) {
+        dicePriorityList = settings.tavernDiceGameRewardOrder;
+        renderPriorityList('dice-priority-list', dicePriorityList);
+    }
+}
+
+function collectCharacterSettings() {
+    const settings = {};
+
+    // Checkboxes
+    document.querySelectorAll('#settings-content input[type="checkbox"]').forEach(el => {
+        settings[el.id] = el.checked;
+    });
+
+    // Numbers
+    document.querySelectorAll('#settings-content input[type="number"]').forEach(el => {
+        if (el.value) settings[el.id] = parseInt(el.value);
+    });
+
+    // Times
+    document.querySelectorAll('#settings-content input[type="time"]').forEach(el => {
+        if (el.value) settings[el.id] = el.value;
+    });
+
+    // Texts
+    document.querySelectorAll('#settings-content input[type="text"]').forEach(el => {
+        if (el.value) settings[el.id] = el.value;
+    });
+
+    // Radios
+    document.querySelectorAll('#settings-content input[type="radio"]:checked').forEach(el => {
+        settings[el.name] = el.value;
+    });
+
+    // Priority lists
+    settings.expeditionRewardPrioList = expeditionPriorityList;
+    settings.tavernDiceGameRewardOrder = dicePriorityList;
+
+    return settings;
+}
+
+let isSavingCharacterSettings = false;
+
+async function saveCharacterSettings() {
+    // Prevent multiple simultaneous saves
+    if (isSavingCharacterSettings) {
+        return;
+    }
+
+    if (!state.currentCharacter) {
+        console.error('No current character selected');
+        showLog('Kein Charakter ausgewaehlt', 'error');
+        return;
+    }
+
+    isSavingCharacterSettings = true;
+
+    // Disable save button during save
+    const saveBtn = document.getElementById('save-char-settings');
+    if (saveBtn) saveBtn.disabled = true;
+
+    try {
+        const settings = collectCharacterSettings();
+
+        // Save and get the response which includes the saved settings
+        const saveResult = await invoke('save_character_settings', {
+            charactername: state.currentCharacter.name,
+            characterid: state.currentCharacter.id,
+            settings: settings
+        });
+
+        // Verify using the response from save (no separate load needed)
+        const savedSettings = saveResult?.settings || {};
+
+        // Check a few key values against what was returned
+        if (settings.settingCharacterActive !== savedSettings.settingCharacterActive) {
+            console.error('MISMATCH: settingCharacterActive - sent:', settings.settingCharacterActive, 'received:', savedSettings.settingCharacterActive);
+        }
+
+        // Update isActive in state.characters to sync table display
+        const charIndex = state.characters.findIndex(c =>
+            c.name === state.currentCharacter.name && c.id === state.currentCharacter.id
+        );
+        if (charIndex !== -1) {
+            state.characters[charIndex].isActive = settings.settingCharacterActive;
+            renderCharactersTable();
+        }
+
+        document.getElementById('character-settings-modal').classList.remove('active');
+        showLog(t('log.charSettingsSaved').replace('{name}', state.currentCharacter.name), 'success');
+
+    } catch (e) {
+        console.error('Failed to save character settings:', e);
+        showLog(t('log.saveError') + ': ' + e.message, 'error');
+    } finally {
+        isSavingCharacterSettings = false;
+        // Re-enable save button
+        if (saveBtn) saveBtn.disabled = false;
+    }
+}
+
+// Copy settings from another character into the current target
+async function copySettingsFromSelect() {
+    if (!state.currentCharacter) return;
+    const select = document.getElementById('copy-settings-select');
+    if (!select || !select.value) return;
+
+    const [sourceIdStr, sourceName] = select.value.split('::');
+    const sourceId = parseInt(sourceIdStr, 10);
+    if (!sourceId || !sourceName) return;
+
+    try {
+        const sourceSettings = await invoke('load_character_settings', {
+            charactername: sourceName,
+            characterid: sourceId
+        }) || {};
+
+        // Populate form with source settings
+        state.currentCharacterSettings = sourceSettings;
+        populateCharacterSettings(sourceSettings);
+        showLog(`Einstellungen von ${sourceName} geladen. Speichern zum Übernehmen.`, 'info');
+    } catch (e) {
+        console.error('Failed to copy settings:', e);
+        showLog('Kopieren der Einstellungen fehlgeschlagen', 'error');
+    }
+}
+
+// ============================================================================
+// Priority Lists
+// ============================================================================
+
+function renderPriorityList(containerId, list) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = list.map((item, index) => `
+        <div class="priority-item" data-index="${index}">
+            <span>${item}</span>
+            <div class="priority-buttons">
+                <button class="priority-btn" onclick="movePriority('${containerId}', ${index}, -1)">&#8593;</button>
+                <button class="priority-btn" onclick="movePriority('${containerId}', ${index}, 1)">&#8595;</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.movePriority = function(containerId, index, direction) {
+    const list = containerId === 'expedition-priority-list' ? expeditionPriorityList : dicePriorityList;
+    const newIndex = index + direction;
+
+    if (newIndex < 0 || newIndex >= list.length) return;
+
+    const temp = list[index];
+    list[index] = list[newIndex];
+    list[newIndex] = temp;
+
+    renderPriorityList(containerId, list);
+};
+
+// ============================================================================
+// Logging
+// ============================================================================
+
+function showLog(message, level = 'info') {
+    console.log(`[${level.toUpperCase()}] ${message}`);
+
+    const container = document.getElementById('log-container');
+    if (!container) return;
+
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${level}`;
+    entry.innerHTML = `
+        <span class="log-time">${new Date().toLocaleTimeString()}</span>
+        <span class="log-message">${message}</span>
+    `;
+
+    container.insertBefore(entry, container.firstChild);
+
+    // Keep only last 100 entries
+    while (container.children.length > 100) {
+        container.removeChild(container.lastChild);
+    }
+}
+
+// Clear logs button
+document.addEventListener('DOMContentLoaded', () => {
+    const clearBtn = document.getElementById('btn-clear-logs');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            const container = document.getElementById('log-container');
+            container.innerHTML = '';
+            showLog('Logs geloescht', 'info');
+        });
+    }
+});
+
+// ============================================================================
+// Expose for debugging
+// ============================================================================
+
+window.sfBotState = state;

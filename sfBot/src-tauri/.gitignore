@@ -1,0 +1,10 @@
+**/target
+**/expedition_statistics.txt
+**/expedition_log.txt
+charactersettings.json
+globalsettings.json
+userConfig.json
+build.bat
+buildDev.bat
+runOnServer.bat
+cache/

@@ -1,0 +1,7 @@
+# 64 bit MSVC - static CRT to avoid VCRUNTIME140.dll dependency
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-arg=/STACK:32000000", "-C", "target-feature=+crt-static"]
+
+# 64 bit Mingw
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-Wl,--stack,32000000"]

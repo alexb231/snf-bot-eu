@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SF Bot</title>
+    <link rel="stylesheet" href="css/modern.css">
+    <script src="js/api.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/main.js" defer></script>
+    <script type="text/javascript">
+        function openKoFi() {
+            window.open('https://ko-fi.com/L4L114YP2F', '_blank');
+        }
+    </script>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="overlay">
+        <div class="spinner"></div>
+        <span data-i18n="loading.connecting">Connecting to server...</span>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app" class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">SF Bot</h1>
+                <span id="version" class="version">v0.0.0</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-item-with-submenu">
+                    <button class="nav-btn active" data-view="dashboard" data-account-filter="">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+                        <span data-i18n="nav.dashboard">Dashboard</span>
+                    </button>
+                    <div id="account-submenu" class="account-submenu">
+                        <!-- Account buttons will be inserted here dynamically -->
+                    </div>
+                </div>
+                <button class="nav-btn" data-view="accounts">
+                    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                    <span data-i18n="nav.accounts">Accounts</span>
+                </button>
+                <button class="nav-btn" data-view="logs">
+                    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                    <span data-i18n="nav.logs">Logs</span>
+                </button>
+                <script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'L4L114YP2F');kofiwidget2.draw();</script> 
+            </nav>
+
+            <div class="sidebar-footer">
+                <button id="btn-bot-settings" class="settings-btn">
+                    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                    <span data-i18n="nav.botSettings">Bot Settings</span>
+                </button>
+                <div class="language-switcher">
+                    <button class="lang-btn" data-lang="en" onclick="setLanguage('en')" title="English">
+                        <svg viewBox="0 0 60 30" width="24" height="12"><clipPath id="s"><path d="M0,0 v30 h60 v-30 z"/></clipPath><clipPath id="t"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath><g clip-path="url(#s)"><path d="M0,0 v30 h60 v-30 z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#t)" stroke="#C8102E" stroke-width="4"/><path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></g></svg>
+                    </button>
+                    <button class="lang-btn" data-lang="de" onclick="setLanguage('de')" title="Deutsch">
+                        <svg viewBox="0 0 5 3" width="24" height="14"><rect width="5" height="3" y="0" fill="#000"/><rect width="5" height="2" y="1" fill="#D00"/><rect width="5" height="1" y="2" fill="#FFCE00"/></svg>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <h2 id="view-title">Dashboard</h2>
+                </div>
+                <div class="header-right">
+                    <div class="bot-status" id="bot-status">
+                        <span class="status-dot"></span>
+                        <span class="status-text" data-i18n="header.stopped">Stopped</span>
+                    </div>
+                    <div class="bot-controls">
+                        <button id="btn-start" class="control-btn start">
+                            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            <span data-i18n="header.start">Start</span>
+                        </button>
+                        <button id="btn-pause" class="control-btn pause" disabled>
+                            <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                            <span data-i18n="header.pause">Pause</span>
+                        </button>
+                        <button id="btn-stop" class="control-btn stop" disabled>
+                            <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                            <span data-i18n="header.stop">Stop</span>
+                        </button>
+                        <button id="btn-shutdown" class="control-btn shutdown" title="Shutdown server">
+                            <svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon accounts-icon">
+                            <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-accounts">0</span>
+                            <span class="stat-label" data-i18n="stats.accounts">Accounts</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon chars-icon">
+                            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-characters">0</span>
+                            <span class="stat-label" data-i18n="stats.characters">Characters</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon active-icon">
+                            <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-active">0</span>
+                            <span class="stat-label" data-i18n="stats.active">Active</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon time-icon">
+                            <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-uptime">00:00:00</span>
+                            <span class="stat-label" data-i18n="stats.uptime">Uptime</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="current-action-card">
+                    <h3 data-i18n="dashboard.currentAction">Current Action</h3>
+                    <p id="current-action" data-i18n="dashboard.botNotStarted">Bot not started</p>
+                </div>
+
+                <div class="characters-section">
+                    <div class="section-header">
+                        <h3 data-i18n="dashboard.characters">Characters</h3>
+                        <button id="btn-refresh" class="refresh-btn">
+                            <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                            <span data-i18n="dashboard.refresh">Refresh</span>
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="characters-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="table.active">Active</th>
+                                    <th data-i18n="table.name">Name</th>
+                                    <th data-i18n="table.level">Level</th>
+                                    <th data-i18n="table.server">Server</th>
+                                    <th data-i18n="table.gold">Gold</th>
+                                    <th data-i18n="table.mushrooms">Mushrooms</th>
+                                    <th data-i18n="table.luckycoins">Lucky Coins</th>
+                                    <th data-i18n="table.hourglasses">Hourglasses</th>
+                                    <th data-i18n="table.mount">Mount</th>
+                                    <th data-i18n="table.beer">Beer</th>
+                                    <th data-i18n="table.arena">Arena</th>
+                                    <th data-i18n="table.thirst">Thirst</th>
+                                    <th data-i18n="table.action">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="character-list">
+                                <tr class="empty-row">
+                                    <td colspan="10" data-i18n="table.empty">No characters loaded. Please add an account and start the bot.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Accounts View -->
+            <section id="view-accounts" class="view">
+                <div class="accounts-container">
+                    <div class="login-card">
+                        <h3 data-i18n="accounts.add">Add Account</h3>
+                        <form id="login-form">
+                            <div class="form-group">
+                                <label for="input-username" data-i18n="accounts.username">Username</label>
+                                <input type="text" id="input-username" placeholder="Account Name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="input-password" data-i18n="accounts.password">Password</label>
+                                <input type="password" id="input-password" placeholder="Password" required>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="input-single">
+                                <label for="input-single" data-i18n="accounts.singleServer">Single Server Account (Old)</label>
+                            </div>
+                            <div class="form-group" id="server-group" style="display: none;">
+                                <label for="input-server" data-i18n="accounts.serverUrl">Server URL</label>
+                                <input type="text" id="input-server" placeholder="e.g. s1.sfgame.de">
+                            </div>
+                            <button type="submit" class="btn-primary">
+                                <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                                <span data-i18n="accounts.addBtn">Add Account</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="saved-accounts-card">
+                        <h3 data-i18n="accounts.saved">Saved Accounts</h3>
+                        <div id="accounts-list" class="accounts-list">
+                            <div class="empty-state" data-i18n="accounts.empty">No accounts saved</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Logs View -->
+            <section id="view-logs" class="view">
+                <div class="logs-card">
+                    <div class="logs-header">
+                        <h3 data-i18n="logs.title">Bot Logs</h3>
+                        <button id="btn-clear-logs" class="btn-secondary">
+                            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                            <span data-i18n="logs.clear">Clear Logs</span>
+                        </button>
+                    </div>
+                    <div id="log-container" class="log-container">
+                        <div class="log-entry info">
+                            <span class="log-time">--:--:--</span>
+                            <span class="log-message" data-i18n="logs.ready">Bot ready...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Global Settings Modal -->
+    <div id="global-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 data-i18n="globalSettings.title">Bot Settings</h2>
+                <button class="modal-close" id="close-global-settings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <div class="setting-row">
+                        <input type="checkbox" id="global-auto-start">
+                        <label for="global-auto-start" data-i18n="globalSettings.autoStart">Automatically start all accounts on launch</label>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label data-i18n="globalSettings.sleepTime">Wait time between requests (ms)</label>
+                    <div class="range-inputs">
+                        <div class="form-group">
+                            <label for="global-sleep-min" data-i18n="globalSettings.min">Min</label>
+                            <input type="number" id="global-sleep-min" value="50" min="10" max="1000">
+                        </div>
+                        <div class="form-group">
+                            <label for="global-sleep-max" data-i18n="globalSettings.max">Max</label>
+                            <input type="number" id="global-sleep-max" value="100" min="10" max="2000">
+                        </div>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label data-i18n="globalSettings.doNotRelogSeconds">Do not relog character after invalid session (seconds)</label>
+                    <div class="range-inputs">
+                        <div class="form-group">
+                            <label for="global-dont-relog-seconds" data-i18n="globalSettings.doNotRelogSecondsShort">Seconds</label>
+                            <input type="number" id="global-dont-relog-seconds" value="3" min="0" max="3600">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-global-settings" class="btn-primary" data-i18n="globalSettings.save">Save</button>
+                <button id="cancel-global-settings" class="btn-secondary" data-i18n="globalSettings.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Character Settings Modal -->
+    <div id="character-settings-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 data-i18n="charSettings.title">Character Settings</h2>
+                <div class="character-info">
+                    <span id="settings-char-name">-</span>
+                    <span id="settings-char-id" class="char-id">ID: -</span>
+                </div>
+                <button class="modal-close" id="close-char-settings">&times;</button>
+            </div>
+            <div class="modal-body settings-modal-body">
+                <!-- Settings Sidebar -->
+                <div class="settings-sidebar">
+                    <button class="settings-nav-btn active" data-section="general" data-i18n="section.general">General</button>
+                    <button class="settings-nav-btn" data-section="tavern" data-i18n="section.tavern">Tavern</button>
+                    <button class="settings-nav-btn" data-section="items" data-i18n="section.items">Items</button>
+                    <button class="settings-nav-btn" data-section="arena" data-i18n="section.arena">Arena</button>
+                    <button class="settings-nav-btn" data-section="quarters" data-i18n="section.quarters">Quarters</button>
+                    <button class="settings-nav-btn" data-section="fortress" data-i18n="section.fortress">Fortress</button>
+                    <button class="settings-nav-btn" data-section="underworld" data-i18n="section.underworld">Underworld</button>
+                    <button class="settings-nav-btn" data-section="character" data-i18n="section.character">Character</button>
+                    <button class="settings-nav-btn" data-section="pets" data-i18n="section.pets">Pets</button>
+                    <button class="settings-nav-btn" data-section="misc" data-i18n="section.misc">Misc</button>
+                    <button class="settings-nav-btn" data-section="dungeons" data-i18n="section.dungeons">Dungeons</button>
+                    <button class="settings-nav-btn" data-section="toilet" data-i18n="section.toilet">Toilet</button>
+                </div>
+
+                <!-- Settings Content -->
+                <div class="settings-content" id="settings-content">
+                    <!-- General Section -->
+                    <div class="settings-section active" id="section-general">
+                        <h3 data-i18n="general.title">General Settings</h3>
+                        <div class="setting-row">
+                            <input type="checkbox" id="settingCharacterActive">
+                            <label for="settingCharacterActive" data-i18n="general.activate">Activate character</label>
+                        </div>
+                    </div>
+
+                    <!-- Tavern Section -->
+                    <div class="settings-section" id="section-tavern">
+                        <h3 data-i18n="tavern.title">Tavern</h3>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="tavern.expeditions">Expeditions</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="tavernPlayExpeditions">
+                                <label for="tavernPlayExpeditions" data-i18n="tavern.playExpeditions">Play expeditions</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="tavernPlayExpExpeditionExp" name="tavernPlayExpExpedition" value="tavernPlayExpExpeditionExp">
+                                <label for="tavernPlayExpExpeditionExp" data-i18n="tavern.prioritizeExp">Prioritize EXP</label>
+                                <input type="radio" id="tavernPlayExpExpeditionGold" name="tavernPlayExpExpedition" value="tavernPlayExpExpeditionGold">
+                                <label for="tavernPlayExpExpeditionGold" data-i18n="tavern.prioritizeGold">Prioritize Gold</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="tavernSkipWithHourglasses">
+                                <label for="tavernSkipWithHourglasses" data-i18n="tavern.skipWithHourglasses">Skip expeditions using hourglasses</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="tavernPlayExpeditionFrom" data-i18n="tavern.expeditionsFrom">Expeditions from</label>
+                                <input type="time" id="tavernPlayExpeditionFrom">
+                            </div>
+
+                            <h4 data-i18n="tavern.rewardPriority">Expedition Reward Priority</h4>
+                            <div class="priority-list" id="expedition-priority-list"></div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="tavern.beer">Beer</h4>
+                            <div class="setting-row">
+                                <label for="tavernDrinkBeerAmount" data-i18n="tavern.beerAmount">Amount of beers to drink</label>
+                                <input type="number" id="tavernDrinkBeerAmount" min="0" max="12" value="0">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="tavern.cityGuard">City Guard</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="tavernPlayCityGuard">
+                                <label for="tavernPlayCityGuard" data-i18n="tavern.playCityGuard">Play city guard</label>
+                            </div>
+                            <div class="setting-row time-range">
+                                <label data-i18n="tavern.from">From</label>
+                                <input type="time" id="tavernPlayCityGuardFrom">
+                                <label data-i18n="tavern.to">To</label>
+                                <input type="time" id="tavernPlayCityGuardTo">
+                            </div>
+                            <div class="setting-row">
+                                <label for="tavernCityGuardTimeToPlay" data-i18n="tavern.guardDuration">City guard duration (hours)</label>
+                                <input type="number" id="tavernCityGuardTimeToPlay" min="1" max="10" value="1">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="tavern.diceGame">Dice Game</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="tavernPlayDiceGame">
+                                <label for="tavernPlayDiceGame" data-i18n="tavern.playDiceGame">Play dice game</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="tavernDiceGameSkipUsingHG">
+                                <label for="tavernDiceGameSkipUsingHG" data-i18n="tavern.diceSkipHG">Skip wait time using hourglasses</label>
+                            </div>
+                            <h4 data-i18n="tavern.dicePriority">Dice Game Priorities</h4>
+                            <div class="priority-list" id="dice-priority-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Items Section -->
+                    <div class="settings-section" id="section-items">
+                        <h3 data-i18n="items.title">Items</h3>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="items.inventoryManagement">Inventory Management</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsCheckbox">
+                                <label for="itemsCheckbox" data-i18n="items.enableInventory">Enable inventory management</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="itemsInventoryMinGoldSaved" data-i18n="items.minGold">Minimum gold to keep</label>
+                                <input type="number" id="itemsInventoryMinGoldSaved" min="0">
+                            </div>
+                            <div class="setting-row">
+                                <label for="itemsInventoryMinMushroomsSaved" data-i18n="items.minMushrooms">Minimum mushrooms to keep</label>
+                                <input type="number" id="itemsInventoryMinMushroomsSaved" min="0">
+                            </div>
+                            <div class="setting-row">
+                                <label for="itemsInventorySlotsToBeLeft" data-i18n="items.freeSlots">Free inventory slots</label>
+                                <input type="number" id="itemsInventorySlotsToBeLeft" min="0">
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsInventoryMinGoldSavedIgnoreGemMine">
+                                <label for="itemsInventoryMinGoldSavedIgnoreGemMine" data-i18n="items.ignoreGemMine">Ignore min gold during gem search</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="items.sellOptions">Sell Options</h4>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="itemsInventoryFullSellOptionCheapest" name="itemsInventoryFullSellOption" value="itemsInventoryFullSellOptionCheapest">
+                                <label for="itemsInventoryFullSellOptionCheapest" data-i18n="items.sellCheapest">Sell cheapest item</label>
+                                <input type="radio" id="itemsInventoryFullSellOptionMostExpensive" name="itemsInventoryFullSellOption" value="itemsInventoryFullSellOptionMostExpensive">
+                                <label for="itemsInventoryFullSellOptionMostExpensive" data-i18n="items.sellExpensive">Sell most expensive item</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsDoNotSellEpics">
+                                <label for="itemsDoNotSellEpics" data-i18n="items.dontSellEpics">Don't sell epics</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsImmediatelyThrowIntoCauldron">
+                                <label for="itemsImmediatelyThrowIntoCauldron" data-i18n="items.throwCauldron">Immediately throw into cauldron</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsImmediatelyThrowIntoCauldronExceptEpics">
+                                <label for="itemsImmediatelyThrowIntoCauldronExceptEpics" data-i18n="items.excludeEpics">Exclude epics from cauldron</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="items.enchant">Enchant Items</h4>
+                            <div class="checkbox-grid">
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemWeapon"><label for="witchEnchantItemWeapon" data-i18n="items.weapon">Weapon</label></div>
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemHat"><label for="witchEnchantItemHat" data-i18n="items.hat">Helmet</label></div>
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemChest"><label for="witchEnchantItemChest" data-i18n="items.chest">Chestplate</label></div>
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemGloves"><label for="witchEnchantItemGloves" data-i18n="items.gloves">Gloves</label></div>
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemBoots"><label for="witchEnchantItemBoots" data-i18n="items.boots">Boots</label></div>
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemNecklace"><label for="witchEnchantItemNecklace" data-i18n="items.necklace">Necklace</label></div>
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemBelt"><label for="witchEnchantItemBelt" data-i18n="items.belt">Belt</label></div>
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemRing"><label for="witchEnchantItemRing" data-i18n="items.ring">Ring</label></div>
+                                <div class="setting-row"><input type="checkbox" id="witchEnchantItemTalisman"><label for="witchEnchantItemTalisman" data-i18n="items.talisman">Talisman</label></div>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="items.potions">Potions</h4>
+                            <div class="potion-settings">
+                                <!-- Winged -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.winged">Winged</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsWingedDrink" name="itemsPotionsWinged" value="drink"><label for="itemsPotionsWingedDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsWingedSell" name="itemsPotionsWinged" value="sell"><label for="itemsPotionsWingedSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsWingedKeep" name="itemsPotionsWinged" value="keep"><label for="itemsPotionsWingedKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsWingedBuy"><label for="itemsPotionsWingedBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- STR Small -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.strSmall">Str Small</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsStrSmallDrink" name="itemsPotionsStrSmall" value="drink"><label for="itemsPotionsStrSmallDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsStrSmallSell" name="itemsPotionsStrSmall" value="sell"><label for="itemsPotionsStrSmallSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsStrSmallKeep" name="itemsPotionsStrSmall" value="keep"><label for="itemsPotionsStrSmallKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsStrSmallBuy"><label for="itemsPotionsStrSmallBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- STR Medium -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.strMedium">Str Medium</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsStrMediumDrink" name="itemsPotionsStrMedium" value="drink"><label for="itemsPotionsStrMediumDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsStrMediumSell" name="itemsPotionsStrMedium" value="sell"><label for="itemsPotionsStrMediumSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsStrMediumKeep" name="itemsPotionsStrMedium" value="keep"><label for="itemsPotionsStrMediumKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsStrMediumBuy"><label for="itemsPotionsStrMediumBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- STR Large -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.strLarge">Str Large</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsStrLargeDrink" name="itemsPotionsStrLarge" value="drink"><label for="itemsPotionsStrLargeDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsStrLargeSell" name="itemsPotionsStrLarge" value="sell"><label for="itemsPotionsStrLargeSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsStrLargeKeep" name="itemsPotionsStrLarge" value="keep"><label for="itemsPotionsStrLargeKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsStrLargeBuy"><label for="itemsPotionsStrLargeBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- DEX Small -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.dexSmall">Dex Small</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsDexSmallDrink" name="itemsPotionsDexSmall" value="drink"><label for="itemsPotionsDexSmallDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsDexSmallSell" name="itemsPotionsDexSmall" value="sell"><label for="itemsPotionsDexSmallSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsDexSmallKeep" name="itemsPotionsDexSmall" value="keep"><label for="itemsPotionsDexSmallKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsDexSmallBuy"><label for="itemsPotionsDexSmallBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- DEX Medium -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.dexMedium">Dex Medium</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsDexMediumDrink" name="itemsPotionsDexMedium" value="drink"><label for="itemsPotionsDexMediumDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsDexMediumSell" name="itemsPotionsDexMedium" value="sell"><label for="itemsPotionsDexMediumSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsDexMediumKeep" name="itemsPotionsDexMedium" value="keep"><label for="itemsPotionsDexMediumKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsDexMediumBuy"><label for="itemsPotionsDexMediumBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- DEX Large -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.dexLarge">Dex Large</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsDexLargeDrink" name="itemsPotionsDexLarge" value="drink"><label for="itemsPotionsDexLargeDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsDexLargeSell" name="itemsPotionsDexLarge" value="sell"><label for="itemsPotionsDexLargeSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsDexLargeKeep" name="itemsPotionsDexLarge" value="keep"><label for="itemsPotionsDexLargeKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsDexLargeBuy"><label for="itemsPotionsDexLargeBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- INT Small -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.intSmall">Int Small</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsIntSmallDrink" name="itemsPotionsIntSmall" value="drink"><label for="itemsPotionsIntSmallDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsIntSmallSell" name="itemsPotionsIntSmall" value="sell"><label for="itemsPotionsIntSmallSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsIntSmallKeep" name="itemsPotionsIntSmall" value="keep"><label for="itemsPotionsIntSmallKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsIntSmallBuy"><label for="itemsPotionsIntSmallBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- INT Medium -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.intMedium">Int Medium</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsIntMediumDrink" name="itemsPotionsIntMedium" value="drink"><label for="itemsPotionsIntMediumDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsIntMediumSell" name="itemsPotionsIntMedium" value="sell"><label for="itemsPotionsIntMediumSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsIntMediumKeep" name="itemsPotionsIntMedium" value="keep"><label for="itemsPotionsIntMediumKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsIntMediumBuy"><label for="itemsPotionsIntMediumBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- INT Large -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.intLarge">Int Large</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsIntLargeDrink" name="itemsPotionsIntLarge" value="drink"><label for="itemsPotionsIntLargeDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsIntLargeSell" name="itemsPotionsIntLarge" value="sell"><label for="itemsPotionsIntLargeSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsIntLargeKeep" name="itemsPotionsIntLarge" value="keep"><label for="itemsPotionsIntLargeKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsIntLargeBuy"><label for="itemsPotionsIntLargeBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- Const Small -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.constSmall">Const Small</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsConstSmallDrink" name="itemsPotionsConstSmall" value="drink"><label for="itemsPotionsConstSmallDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsConstSmallSell" name="itemsPotionsConstSmall" value="sell"><label for="itemsPotionsConstSmallSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsConstSmallKeep" name="itemsPotionsConstSmall" value="keep"><label for="itemsPotionsConstSmallKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsConstSmallBuy"><label for="itemsPotionsConstSmallBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- Const Medium -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.constMedium">Const Medium</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsConstMediumDrink" name="itemsPotionsConstMedium" value="drink"><label for="itemsPotionsConstMediumDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsConstMediumSell" name="itemsPotionsConstMedium" value="sell"><label for="itemsPotionsConstMediumSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsConstMediumKeep" name="itemsPotionsConstMedium" value="keep"><label for="itemsPotionsConstMediumKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsConstMediumBuy"><label for="itemsPotionsConstMediumBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- Const Large -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.constLarge">Const Large</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsConstLargeDrink" name="itemsPotionsConstLarge" value="drink"><label for="itemsPotionsConstLargeDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsConstLargeSell" name="itemsPotionsConstLarge" value="sell"><label for="itemsPotionsConstLargeSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsConstLargeKeep" name="itemsPotionsConstLarge" value="keep"><label for="itemsPotionsConstLargeKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsConstLargeBuy"><label for="itemsPotionsConstLargeBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- Luck Small -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.luckSmall">Luck Small</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsLuckSmallDrink" name="itemsPotionsLuckSmall" value="drink"><label for="itemsPotionsLuckSmallDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsLuckSmallSell" name="itemsPotionsLuckSmall" value="sell"><label for="itemsPotionsLuckSmallSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsLuckSmallKeep" name="itemsPotionsLuckSmall" value="keep"><label for="itemsPotionsLuckSmallKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsLuckSmallBuy"><label for="itemsPotionsLuckSmallBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- Luck Medium -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.luckMedium">Luck Medium</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsLuckMediumDrink" name="itemsPotionsLuckMedium" value="drink"><label for="itemsPotionsLuckMediumDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsLuckMediumSell" name="itemsPotionsLuckMedium" value="sell"><label for="itemsPotionsLuckMediumSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsLuckMediumKeep" name="itemsPotionsLuckMedium" value="keep"><label for="itemsPotionsLuckMediumKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsLuckMediumBuy"><label for="itemsPotionsLuckMediumBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                                <!-- Luck Large -->
+                                <div class="potion-row">
+                                    <span class="potion-name" data-i18n="items.luckLarge">Luck Large</span>
+                                    <div class="potion-options">
+                                        <input type="radio" id="itemsPotionsLuckLargeDrink" name="itemsPotionsLuckLarge" value="drink"><label for="itemsPotionsLuckLargeDrink" data-i18n="items.drink">Drink</label>
+                                        <input type="radio" id="itemsPotionsLuckLargeSell" name="itemsPotionsLuckLarge" value="sell"><label for="itemsPotionsLuckLargeSell" data-i18n="items.sell">Sell</label>
+                                        <input type="radio" id="itemsPotionsLuckLargeKeep" name="itemsPotionsLuckLarge" value="keep"><label for="itemsPotionsLuckLargeKeep" data-i18n="items.keep">Keep</label>
+                                        <input type="checkbox" id="itemsPotionsLuckLargeBuy"><label for="itemsPotionsLuckLargeBuy" data-i18n="items.buy">Buy</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsMagicShopBuyHourglasses">
+                                <label for="itemsMagicShopBuyHourglasses" data-i18n="items.buyHourglasses">Buy hourglasses in shop</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsBrewPotionsUsingFruits">
+                                <label for="itemsBrewPotionsUsingFruits" data-i18n="items.brewPotions">Brew potions using fruits (Level 632+)</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="items.gems">Gems</h4>
+                            <div class="gem-settings">
+                                <div class="gem-row"><span data-i18n="items.strength">Strength</span><input type="radio" id="itemsGemStrengthKeep" name="itemsGemStrength" value="keep"><label for="itemsGemStrengthKeep" data-i18n="items.keep">Keep</label><input type="radio" id="itemsGemStrengthSell" name="itemsGemStrength" value="sell"><label for="itemsGemStrengthSell" data-i18n="items.sell">Sell</label></div>
+                                <div class="gem-row"><span data-i18n="items.dexterity">Dexterity</span><input type="radio" id="itemsGemDexKeep" name="itemsGemDex" value="keep"><label for="itemsGemDexKeep" data-i18n="items.keep">Keep</label><input type="radio" id="itemsGemDexSell" name="itemsGemDex" value="sell"><label for="itemsGemDexSell" data-i18n="items.sell">Sell</label></div>
+                                <div class="gem-row"><span data-i18n="items.intelligence">Intelligence</span><input type="radio" id="itemsGemIntKeep" name="itemsGemInt" value="keep"><label for="itemsGemIntKeep" data-i18n="items.keep">Keep</label><input type="radio" id="itemsGemIntSell" name="itemsGemInt" value="sell"><label for="itemsGemIntSell" data-i18n="items.sell">Sell</label></div>
+                                <div class="gem-row"><span data-i18n="items.constitution">Constitution</span><input type="radio" id="itemsGemConstKeep" name="itemsGemConst" value="keep"><label for="itemsGemConstKeep" data-i18n="items.keep">Keep</label><input type="radio" id="itemsGemConstSell" name="itemsGemConst" value="sell"><label for="itemsGemConstSell" data-i18n="items.sell">Sell</label></div>
+                                <div class="gem-row"><span data-i18n="items.luck">Luck</span><input type="radio" id="itemsGemLuckKeep" name="itemsGemLuck" value="keep"><label for="itemsGemLuckKeep" data-i18n="items.keep">Keep</label><input type="radio" id="itemsGemLuckSell" name="itemsGemLuck" value="sell"><label for="itemsGemLuckSell" data-i18n="items.sell">Sell</label></div>
+                                <div class="gem-row"><span data-i18n="items.black">Black</span><input type="radio" id="itemsGemBlackKeep" name="itemsGemBlack" value="keep"><label for="itemsGemBlackKeep" data-i18n="items.keep">Keep</label><input type="radio" id="itemsGemBlackSell" name="itemsGemBlack" value="sell"><label for="itemsGemBlackSell" data-i18n="items.sell">Sell</label></div>
+                                <div class="gem-row"><span data-i18n="items.legendary">Legendary</span><input type="radio" id="itemsGemLegendaryKeep" name="itemsGemLegendary" value="keep"><label for="itemsGemLegendaryKeep" data-i18n="items.keep">Keep</label><input type="radio" id="itemsGemLegendarySell" name="itemsGemLegendary" value="sell"><label for="itemsGemLegendarySell" data-i18n="items.sell">Sell</label></div>
+                            </div>
+                            <div class="setting-row">
+                                <label for="itemsKeepGemPercent" data-i18n="items.keepGemPercent">Keep gems if >= % of current</label>
+                                <input type="number" id="itemsKeepGemPercent" min="0" max="100" value="0">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="items.equipmentSwap">Equipment Swap</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsEnableEquipmentSwap">
+                                <label for="itemsEnableEquipmentSwap" data-i18n="items.enableSwap">Enable equipment swap</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Arena Section -->
+                    <div class="settings-section" id="section-arena">
+                        <h3 data-i18n="arena.title">Arena</h3>
+                        <div class="setting-row">
+                            <input type="checkbox" id="arenaCheckbox">
+                            <label for="arenaCheckbox" data-i18n="arena.enable">Enable arena</label>
+                        </div>
+                        <div class="setting-row">
+                            <input type="checkbox" id="arenaStopWhenDone">
+                            <label for="arenaStopWhenDone" data-i18n="arena.stopAfter10">Stop after 10 wins</label>
+                        </div>
+                        <div class="setting-row">
+                            <input type="checkbox" id="arenaFillScrapbook">
+                            <label for="arenaFillScrapbook" data-i18n="arena.fillScrapbook">Fill scrapbook after EXP fights</label>
+                        </div>
+                    </div>
+
+                    <!-- Quarters Section -->
+                    <div class="settings-section" id="section-quarters">
+                        <h3 data-i18n="quarters.title">Quarters</h3>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="quarters.guildAttacks">Guild Attacks</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersOrderAtk">
+                                <label for="quartersOrderAtk" data-i18n="quarters.orderAttack">Attack preferred guilds</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="quartersOrderAtkFavouriteEnemies" data-i18n="quarters.preferredEnemies">Preferred enemies (separated by /)</label>
+                                <input type="text" id="quartersOrderAtkFavouriteEnemies" placeholder="Guild1/Guild2">
+                            </div>
+                            <div class="setting-row time-range">
+                                <label data-i18n="quarters.firstAttackTime">First attack time</label>
+                                <input type="time" id="quartersOrderAtkFavouriteEnemiesTimeFirst">
+                                <label data-i18n="quarters.secondAttackTime">Second attack time</label>
+                                <input type="time" id="quartersOrderAtkFavouriteEnemiesTimeSecond">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="quarters.guildParticipation">Guild Participation</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersSignUpGuildAtks">
+                                <label for="quartersSignUpGuildAtks" data-i18n="quarters.signUpAttacks">Sign up for guild attacks</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersSignUpGuildDef">
+                                <label for="quartersSignUpGuildDef" data-i18n="quarters.signUpDefense">Sign up for guild defense</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersSignUpHydra">
+                                <label for="quartersSignUpHydra" data-i18n="quarters.signUpHydra">Sign up for guild hydra</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quarterFightDungeonPortal">
+                                <label for="quarterFightDungeonPortal" data-i18n="quarters.fightPortal">Fight guild portal</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="quarters.other">Other</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersCollectMailRewards">
+                                <label for="quartersCollectMailRewards" data-i18n="quarters.collectMail">Collect mail rewards</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersSpinLuckyWheel">
+                                <label for="quartersSpinLuckyWheel" data-i18n="quarters.spinWheel">Spin lucky wheel</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="quartersSpinLuckyWithResourcesLuckyCoin" name="quartersSpinLuckyWithResources" value="spinLuckyWheelCoins">
+                                <label for="quartersSpinLuckyWithResourcesLuckyCoin" data-i18n="quarters.luckyCoins">Lucky coins</label>
+                                <input type="radio" id="quartersSpinLuckyWithResourcesMushroom" name="quartersSpinLuckyWithResources" value="spinLuckyWheelMushrooms">
+                                <label for="quartersSpinLuckyWithResourcesMushroom" data-i18n="quarters.mushrooms">Mushrooms</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="quartersSpinLuckyWithResourcesAmount" data-i18n="quarters.spinAmount">Number of spins</label>
+                                <input type="number" id="quartersSpinLuckyWithResourcesAmount" min="0" max="40" value="0">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="quarters.hellevator">Hellevator</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersDoPlayHellevator">
+                                <label for="quartersDoPlayHellevator" data-i18n="quarters.playHellevator">Play hellevator</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="quartersHellevatorKeyCardsKeep" data-i18n="quarters.keepKeycards">Keep keycards</label>
+                                <input type="number" id="quartersHellevatorKeyCardsKeep" min="0" max="100" value="0">
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersHellevatorClaimReward">
+                                <label for="quartersHellevatorClaimReward" data-i18n="quarters.claimDaily">Claim daily rewards</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersHellevatorClaimRewardFinal">
+                                <label for="quartersHellevatorClaimRewardFinal" data-i18n="quarters.claimFinal">Claim final reward</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="quartersHellevatorJoinRaid">
+                                <label for="quartersHellevatorJoinRaid" data-i18n="quarters.joinRaid">Join Hell Attack</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="quartersHellevatorJoinRaidFloor" data-i18n="quarters.raidFloor">Hell Attack floor</label>
+                                <input type="number" id="quartersHellevatorJoinRaidFloor" min="0" max="10" value="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fortress Section -->
+                    <div class="settings-section" id="section-fortress">
+                        <h3 data-i18n="fortress.title">Fortress</h3>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="fortress.collectResources">Collect Resources</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="collectWood">
+                                <label for="collectWood" data-i18n="fortress.collectWood">Collect wood</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="collectStone">
+                                <label for="collectStone" data-i18n="fortress.collectStone">Collect stone</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="collectExp">
+                                <label for="collectExp" data-i18n="fortress.collectExp">Collect EXP</label>
+                            </div>
+                            <div class="setting-row time-range">
+                                <label data-i18n="fortress.collectFrom">Collect from</label>
+                                <input type="time" id="fortressCollectTimeFrom">
+                                <label data-i18n="fortress.collectTo">to</label>
+                                <input type="time" id="fortressCollectTimeTo">
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="fortessSearchForGems">
+                                <label for="fortessSearchForGems" data-i18n="fortress.searchGems">Search for gems</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="fortress.attacks">Attacks</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="fortressDoAttacks">
+                                <label for="fortressDoAttacks" data-i18n="fortress.doAttacks">Perform fortress attacks</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="useOneSoldier" name="fortressAttackMode" value="fortressAttackOneSoliderAttackOnly">
+                                <label for="useOneSoldier" data-i18n="fortress.oneSoldier">Use 1 soldier</label>
+                                <input type="radio" id="attackWithProposedSoldiers" name="fortressAttackMode" value="fortressAttackUseSoldierAdvice">
+                                <label for="attackWithProposedSoldiers" data-i18n="fortress.proposedSoldiers">Proposed soldiers</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="fortressAdditionalSoldierPercent" data-i18n="fortress.additionalPercent">Additional % soldiers</label>
+                                <input type="number" id="fortressAdditionalSoldierPercent" min="0" max="100">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="fortress.training">Training</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="fortessTrainSoldiers">
+                                <label for="fortessTrainSoldiers" data-i18n="fortress.trainSoldiers">Train soldiers</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="fortessTrainMages">
+                                <label for="fortessTrainMages" data-i18n="fortress.trainMages">Train mages</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="fortessTrainArchers">
+                                <label for="fortessTrainArchers" data-i18n="fortress.trainArchers">Train archers</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="fortress.buildings">Buildings</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="fortessUpgradeOurOrder">
+                                <label for="fortessUpgradeOurOrder" data-i18n="fortress.upgradeBuildings">Upgrade fortress buildings</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Underworld Section -->
+                    <div class="settings-section" id="section-underworld">
+                        <h3 data-i18n="underworld.title">Underworld</h3>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="underworld.resources">Resources</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="underworldCollectSouls">
+                                <label for="underworldCollectSouls" data-i18n="underworld.collectSouls">Collect souls</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="underworldCollectGold">
+                                <label for="underworldCollectGold" data-i18n="underworld.collectGold">Collect gold</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="underworldCollectThirst">
+                                <label for="underworldCollectThirst" data-i18n="underworld.collectThirst">Collect thirst</label>
+                            </div>
+                            <div class="setting-row time-range">
+                                <label data-i18n="underworld.dontCollectFrom">Don't collect gold from</label>
+                                <input type="time" id="underworldDontCollectGoldFrom">
+                                <label data-i18n="underworld.dontCollectTo">to</label>
+                                <input type="time" id="underworldDontCollectGoldTo">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="underworld.upgrades">Upgrades</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="underworldUpgradeBuildings">
+                                <label for="underworldUpgradeBuildings" data-i18n="underworld.upgradeBuildings">Upgrade underworld buildings</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="underworldUpgradeKeeper">
+                                <label for="underworldUpgradeKeeper" data-i18n="underworld.upgradeKeeper">Upgrade keeper</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="underworldUpgradeKeeperSoulsToKeep" data-i18n="underworld.keepSouls">Keep souls</label>
+                                <input type="number" id="underworldUpgradeKeeperSoulsToKeep" min="0">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="underworld.attacks">Attacks</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="underworldPerformAttacks">
+                                <label for="underworldPerformAttacks" data-i18n="underworld.performAttacks">Perform proposed attacks</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="underWorldAttackFavouriteOpponent">
+                                <label for="underWorldAttackFavouriteOpponent" data-i18n="underworld.attackFavourite">Attack preferred opponent</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="underworldFavouriteOpponents" data-i18n="underworld.favouriteOpponent">Preferred opponent</label>
+                                <input type="text" id="underworldFavouriteOpponents" placeholder="Enter name">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Character Section -->
+                    <div class="settings-section" id="section-character">
+                        <h3 data-i18n="character.title">Character</h3>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="character.attributes">Attributes</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="characterIncreaseStatAttributes">
+                                <label for="characterIncreaseStatAttributes" data-i18n="character.increaseStats">Increase attributes</label>
+                            </div>
+                            <h4 data-i18n="character.statDistribution">Stat Distribution (%)</h4>
+                            <div class="stat-distribution">
+                                <div class="setting-row"><label for="characterStatDistributionStr" data-i18n="character.str">Strength</label><input type="number" id="characterStatDistributionStr" min="0" max="100">%</div>
+                                <div class="setting-row"><label for="characterStatDistributionDex" data-i18n="character.dex">Dexterity</label><input type="number" id="characterStatDistributionDex" min="0" max="100">%</div>
+                                <div class="setting-row"><label for="characterStatDistributionInt" data-i18n="character.int">Intelligence</label><input type="number" id="characterStatDistributionInt" min="0" max="100">%</div>
+                                <div class="setting-row"><label for="characterStatDistributionConst" data-i18n="character.const">Constitution</label><input type="number" id="characterStatDistributionConst" min="0" max="100">%</div>
+                                <div class="setting-row"><label for="characterStatDistributionLuck" data-i18n="character.luck">Luck</label><input type="number" id="characterStatDistributionLuck" min="0" max="100">%</div>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="character.mount">Mount</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="enableBuyingMount">
+                                <label for="enableBuyingMount" data-i18n="character.enableMount">Enable mount buying</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="characterBuyBestMount" name="characterMount" value="buyBestMountPossible"><label for="characterBuyBestMount" data-i18n="character.bestMount">Best affordable</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="characterBuyGriffon" name="characterMount" value="buyGriffonMount"><label for="characterBuyGriffon" data-i18n="character.griffon">Griffon/Dragon</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="characterBuyTiger" name="characterMount" value="buyTigerMount"><label for="characterBuyTiger" data-i18n="character.tiger">Tiger</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="characterBuyHorse" name="characterMount" value="buyHorseMount"><label for="characterBuyHorse" data-i18n="character.horse">Horse</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="characterBuyCow" name="characterMount" value="buyCowMount"><label for="characterBuyCow" data-i18n="character.cow">Cow</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pets Section -->
+                    <div class="settings-section" id="section-pets">
+                        <h3 data-i18n="pets.title">Pets</h3>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="pets.fights">Fights</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="petsDoFights">
+                                <label for="petsDoFights" data-i18n="pets.doFights">Pet arena fights</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="petsDoDungeons">
+                                <label for="petsDoDungeons" data-i18n="pets.doDungeons">Pet dungeon fights</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="pets.feeding">Feeding</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="petsDoFeed">
+                                <label for="petsDoFeed" data-i18n="pets.doFeed">Feed pets</label>
+                            </div>
+                            <div class="setting-row radio-group">
+                                <input type="radio" id="petsFeedCheap" name="petsFeedMode" value="feedPetsCheapest"><label for="petsFeedCheap" data-i18n="pets.cheapest">Cheapest way</label>
+                                <input type="radio" id="petsFeedShroomer" name="petsFeedMode" value="feedPetsExpensive"><label for="petsFeedShroomer" data-i18n="pets.expensive">Shroomer way</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="petsToFeedPerDay" data-i18n="pets.feedPerDay">Pets per habitat to feed</label>
+                                <input type="number" id="petsToFeedPerDay" min="0" max="20" value="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Misc Section -->
+                    <div class="settings-section" id="section-misc">
+                        <h3 data-i18n="misc.title">Misc</h3>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="misc.calendar">Calendar</h4>
+                            <div class="setting-row">
+                                <label for="miscDontCollectCalendarBefore" data-i18n="misc.dontCollectBefore">Don't collect calendar before</label>
+                                <input type="time" id="miscDontCollectCalendarBefore">
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="miscCollectCalendar">
+                                <label for="miscCollectCalendar" data-i18n="misc.collectAll">Collect all calendars</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="miscCollectCalendarExpOnly">
+                                <label for="miscCollectCalendarExpOnly" data-i18n="misc.collectExpOnly">Collect EXP calendar only</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="miscCollectCalendarMushroomsCalendar">
+                                <label for="miscCollectCalendarMushroomsCalendar" data-i18n="misc.collectMushrooms">Consider mushroom calendar</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="misc.rewards">Rewards</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="miscCollectDailyRewards">
+                                <label for="miscCollectDailyRewards" data-i18n="misc.collectDaily">Collect daily rewards</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="miscCollectWeeklyRewards">
+                                <label for="miscCollectWeeklyRewards" data-i18n="misc.collectWeekly">Collect weekly rewards</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="misc.dailyTasks">Daily Tasks</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="miscPerformDailyGambling">
+                                <label for="miscPerformDailyGambling" data-i18n="misc.gambling">Gambling</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="miscPerformDailyBareHand">
+                                <label for="miscPerformDailyBareHand" data-i18n="misc.bareHand">Bare hand attack</label>
+                            </div>
+                            <div class="checkbox-grid">
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightWarrior"><label for="miscPerformDailyFightWarrior" data-i18n="misc.defeatWarrior">Defeat 3x Warrior</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightScout"><label for="miscPerformDailyFightScout" data-i18n="misc.defeatScout">Defeat 3x Scout</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightMage"><label for="miscPerformDailyFightMage" data-i18n="misc.defeatMage">Defeat 3x Mage</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightAssassin"><label for="miscPerformDailyFightAssassin" data-i18n="misc.defeatAssassin">Defeat 3x Assassin</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightBattleMage"><label for="miscPerformDailyFightBattleMage" data-i18n="misc.defeatBattleMage">Defeat 3x Battle Mage</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightBerserker"><label for="miscPerformDailyFightBerserker" data-i18n="misc.defeatBerserker">Defeat 3x Berserker</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightDruid"><label for="miscPerformDailyFightDruid" data-i18n="misc.defeatDruid">Defeat 3x Druid</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightDemonHunter"><label for="miscPerformDailyFightDemonHunter" data-i18n="misc.defeatDemonHunter">Defeat 3x Demon Hunter</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightBard"><label for="miscPerformDailyFightBard" data-i18n="misc.defeatBard">Defeat 3x Bard</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightNecromancer"><label for="miscPerformDailyFightNecromancer" data-i18n="misc.defeatNecromancer">Defeat 3x Necromancer</label></div>
+                                <div class="setting-row"><input type="checkbox" id="miscPerformDailyFightPaladin"><label for="miscPerformDailyFightPaladin" data-i18n="misc.defeatPaladin">Defeat 3x Paladin</label></div>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="misc.breakTimes">Break Times</h4>
+                            <div class="setting-row time-range">
+                                <label data-i18n="misc.noActionsFrom">No actions from</label>
+                                <input type="time" id="miscDontPerformActionsFrom">
+                                <label data-i18n="misc.noActionsTo">to</label>
+                                <input type="time" id="miscDontPerformActionsTo">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dungeons Section -->
+                    <div class="settings-section" id="section-dungeons">
+                        <h3 data-i18n="dungeons.title">Dungeons</h3>
+                        <div class="setting-row">
+                            <input type="checkbox" id="dungeonCheckbox">
+                            <label for="dungeonCheckbox" data-i18n="dungeons.enable">Enable dungeons</label>
+                        </div>
+                        <div class="setting-row">
+                            <input type="checkbox" id="dungeonFightDemonPortal">
+                            <label for="dungeonFightDemonPortal" data-i18n="dungeons.fightPortal">Fight demon portal</label>
+                        </div>
+                        <div class="setting-row">
+                            <input type="checkbox" id="dungeonFightLowestLevel">
+                            <label for="dungeonFightLowestLevel" data-i18n="dungeons.bestWinrate">Dungeon with best win rate</label>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="dungeons.skip">Skip Dungeons</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="dungeonSkipIdols">
+                                <label for="dungeonSkipIdols" data-i18n="dungeons.skipIdols">Skip Loop of Idols</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="dungeonSkipTwister">
+                                <label for="dungeonSkipTwister" data-i18n="dungeons.skipTwister">Skip Twister</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="dungeonSkipTower">
+                                <label for="dungeonSkipTower" data-i18n="dungeons.skipTower">Skip Tower</label>
+                            </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="dungeonSkipSandstorm">
+                                <label for="dungeonSkipSandstorm" data-i18n="dungeons.skipSandstorm">Skip Sandstorm</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="dungeons.arenaManager">Arena Manager</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="arenaManagerActive">
+                                <label for="arenaManagerActive" data-i18n="dungeons.enableManager">Enable arena manager</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="arenaManagerSacrificeAfterPercent" data-i18n="dungeons.sacrificePercent">Sacrifice after % of current runes</label>
+                                <input type="number" id="arenaManagerSacrificeAfterPercent" min="0" max="100">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Toilet Section -->
+                    <div class="settings-section" id="section-toilet">
+                        <h3 data-i18n="toilet.title">Toilet</h3>
+                        <div class="setting-row">
+                            <input type="checkbox" id="toiletEnableToilet">
+                            <label for="toiletEnableToilet" data-i18n="toilet.enable">Enable arcane toilet</label>
+                        </div>
+                        <div class="setting-row">
+                            <input type="checkbox" id="toiletFlushWhenFull">
+                            <label for="toiletFlushWhenFull" data-i18n="toilet.flushWhenFull">Flush toilet when full</label>
+                        </div>
+                        <p class="setting-hint" data-i18n="toilet.priorityHint">Priority: 1. Epic, 2. Gem, 3. Normal item</p>
+                        <div class="setting-row">
+                            <input type="checkbox" id="toiletSacrificeEpics">
+                            <label for="toiletSacrificeEpics" data-i18n="toilet.sacrificeEpics">Sacrifice epics</label>
+                        </div>
+                        <div class="setting-row">
+                            <input type="checkbox" id="toiletExcludeEpicWeapons">
+                            <label for="toiletExcludeEpicWeapons" data-i18n="toilet.excludeWeapons">Exclude epic weapons</label>
+                        </div>
+                        <div class="setting-row">
+                            <input type="checkbox" id="toiletSacrificeGems">
+                            <label for="toiletSacrificeGems" data-i18n="toilet.sacrificeGems">Sacrifice gems</label>
+                        </div>
+                        <div class="setting-row">
+                            <input type="checkbox" id="toiletSacrificeNormalItems">
+                            <label for="toiletSacrificeNormalItems" data-i18n="toilet.sacrificeNormal">Sacrifice normal items</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="copy-settings-group">
+                    <label for="copy-settings-select" data-i18n="charSettings.copyFrom">Copy settings from:</label>
+                    <select id="copy-settings-select">
+                        <option value="" data-i18n="charSettings.copyPlaceholder">Select character</option>
+                    </select>
+                </div>
+                <button id="save-char-settings" class="btn-primary" data-i18n="globalSettings.save">Save</button>
+                <button id="cancel-char-settings" class="btn-secondary" data-i18n="globalSettings.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Character Log Modal -->
+    <div id="character-log-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="log-modal-title">Character Log</h3>
+                <button class="modal-close" id="close-char-log">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre id="character-log-content" class="log-content"></pre>
+            </div>
+            <div class="modal-footer log-modal-footer">
+                <button id="log-prev-char" class="btn-secondary">&larr; <span data-i18n="logModal.previous">Previous</span></button>
+                <button id="log-close" class="btn-primary" data-i18n="logModal.close">Close</button>
+                <button id="log-next-char" class="btn-secondary"><span data-i18n="logModal.next">Next</span> &rarr;</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
