@@ -827,7 +827,11 @@ function renderExpeditionStats(stats, fallback, mode) {
     content.classList.remove('expedition-stats-empty');
 
     const expeditionEntries = Object.entries(expeditions);
-    expeditionEntries.sort((a, b) => (b[1]?.picked || 0) - (a[1]?.picked || 0));
+    expeditionEntries.sort((a, b) => {
+        const nameA = formatExpeditionName(a[0]).toLowerCase();
+        const nameB = formatExpeditionName(b[0]).toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
 
     let totalRuns = 0;
     let totalHeroism = 0;
@@ -1083,7 +1087,11 @@ function renderExpeditionSummary(summaryData, mode) {
     }
     content.classList.remove('expedition-summary-empty');
 
-    entries.sort((a, b) => (b[1]?.picked || 0) - (a[1]?.picked || 0));
+    entries.sort((a, b) => {
+        const nameA = formatExpeditionName(a[0]).toLowerCase();
+        const nameB = formatExpeditionName(b[0]).toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
 
     const table = document.createElement('table');
     table.className = 'expedition-summary-table';
