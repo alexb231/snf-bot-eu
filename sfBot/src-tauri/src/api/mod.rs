@@ -19,6 +19,7 @@ use serde_json::Value;
 use tokio::sync::RwLock;
 
 use crate::bot_runner::{AccountInfo, BotRunner};
+use crate::expedition_utils::read_expedition_stats;
 use crate::utils::{CharacterDisplay, PlayerConfig, UserConfig};
 use crate::{generate_hash, perform_check_whether_user_is_allowed_to_start_bot};
 
@@ -375,6 +376,29 @@ pub async fn get_character_log(Query(query): Query<CharacterLogQuery>) -> impl I
     match crate::bot_runner::read_character_log(&query.name, query.id) {
         Ok(content) => (StatusCode::OK, Json(serde_json::json!({"log": content}))),
         Err(e) => (StatusCode::OK, Json(serde_json::json!({"log": "", "error": e}))),
+    }
+}
+
+// ============================================================================
+// Expedition Stats Endpoints
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct ExpeditionStatsQuery {
+    pub name: String,
+    pub id: u32,
+    pub server: String,
+}
+
+/// GET /api/characters/expedition-stats?name=X&id=Y&server=Z - Get expedition stats for a character
+pub async fn get_character_expedition_stats(Query(query): Query<ExpeditionStatsQuery>) -> impl IntoResponse {
+    match read_expedition_stats(&query.name, query.id, &query.server) {
+        Ok(Some(stats)) => (StatusCode::OK, Json(serde_json::json!({"stats": stats}))),
+        Ok(None) => (StatusCode::OK, Json(serde_json::json!({"stats": null}))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e})),
+        ),
     }
 }
 

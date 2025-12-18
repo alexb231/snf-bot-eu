@@ -50,6 +50,7 @@ const translations = {
         "table.thirst": "Thirst",
         "table.action": "Action",
         "table.copySettings": "Copy settings",
+        "table.stats": "Stats",
         "table.log": "Log",
         "table.settings": "Settings",
         "table.empty": "No characters loaded. Please add an account and start the bot.",
@@ -343,7 +344,22 @@ const translations = {
         // Log Modal
         "logModal.previous": "Previous",
         "logModal.close": "Close",
-        "logModal.next": "Next"
+        "logModal.next": "Next",
+
+        // Expedition Stats
+        "expeditionStats.title": "Expedition Stats",
+        "expeditionStats.close": "Close",
+        "expeditionStats.loading": "Loading...",
+        "expeditionStats.noData": "No expedition stats found",
+        "expeditionStats.character": "Character",
+        "expeditionStats.server": "Server",
+        "expeditionStats.runs": "Expeditions",
+        "expeditionStats.heroismAvg": "Heroism avg",
+        "expeditionStats.heroismMax": "Heroism max",
+        "expeditionStats.heroismLast": "Heroism last",
+        "expeditionStats.keysAvg": "Keys avg",
+        "expeditionStats.chestsAvg": "Chests avg",
+        "expeditionStats.encounters": "Encounters"
     },
     de: {
         // Loading
@@ -395,6 +411,7 @@ const translations = {
         "table.thirst": "Durst",
         "table.action": "Aktion",
         "table.copySettings": "Einstellungen kopieren",
+        "table.stats": "Stats",
         "table.log": "Log",
         "table.settings": "Einstellungen",
         "table.empty": "Keine Charaktere geladen. Bitte Account hinzufuegen und Bot starten.",
@@ -688,7 +705,22 @@ const translations = {
         // Log Modal
         "logModal.previous": "Vorheriger",
         "logModal.close": "Schliessen",
-        "logModal.next": "Naechster"
+        "logModal.next": "Naechster",
+
+        // Expedition Stats
+        "expeditionStats.title": "Expeditions-Stats",
+        "expeditionStats.close": "Schliessen",
+        "expeditionStats.loading": "Lade...",
+        "expeditionStats.noData": "Keine Expeditions-Stats gefunden",
+        "expeditionStats.character": "Charakter",
+        "expeditionStats.server": "Server",
+        "expeditionStats.runs": "Expeditionen",
+        "expeditionStats.heroismAvg": "Heroism Durchschnitt",
+        "expeditionStats.heroismMax": "Heroism Max",
+        "expeditionStats.heroismLast": "Heroism Letzte",
+        "expeditionStats.keysAvg": "Keys Durchschnitt",
+        "expeditionStats.chestsAvg": "Chests Durchschnitt",
+        "expeditionStats.encounters": "Begegnungen"
     }
 };
 

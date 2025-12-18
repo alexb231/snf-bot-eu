@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupLoginForm();
     setupModals();
     setupLogModal();
+    setupExpeditionStatsModal();
     setupSettingsNavigation();
 
     // Start refresh interval
@@ -613,6 +614,7 @@ function renderCharactersTable() {
             <td>${char.fights || 0}/10</td>
             <td>${char.alu || 0}</td>
             <td>
+                <button class="char-exp-stats-btn" data-char-id="${char.id}" data-char-name="${char.name}" data-char-server="${char.server || ''}">${t('table.stats')}</button>
                 <button class="char-log-btn" data-char-id="${char.id}" data-char-name="${char.name}">${t('table.log')}</button>
                 <button class="char-settings-btn" data-char-id="${char.id}" data-char-name="${char.name}">${t('table.settings')}</button>
             </td>
@@ -645,6 +647,15 @@ function renderCharactersTable() {
             const charId = parseInt(e.target.dataset.charId);
             const charName = e.target.dataset.charName;
             openCharacterLog(charId, charName);
+        });
+    });
+
+    tbody.querySelectorAll('.char-exp-stats-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const charId = parseInt(e.target.dataset.charId);
+            const charName = e.target.dataset.charName;
+            const charServer = e.target.dataset.charServer || '';
+            openExpeditionStats(charId, charName, charServer);
         });
     });
 }
@@ -753,6 +764,239 @@ function setupLogModal() {
 
     document.getElementById('log-next-char').addEventListener('click', () => {
         navigateLogCharacter(1);
+    });
+}
+
+// ============================================================================
+// Expedition Stats Modal
+// ============================================================================
+
+async function openExpeditionStats(charId, charName, charServer) {
+    const modal = document.getElementById('expedition-stats-modal');
+    const title = document.getElementById('expedition-stats-title');
+    const summary = document.getElementById('expedition-stats-summary');
+    const content = document.getElementById('expedition-stats-content');
+
+    title.textContent = `${t('expeditionStats.title')}: ${charName}`;
+    summary.innerHTML = '';
+    content.textContent = t('expeditionStats.loading');
+    content.classList.add('expedition-stats-empty');
+
+    modal.classList.add('active');
+
+    try {
+        const result = await invoke('get_character_expedition_stats', {
+            name: charName,
+            id: charId,
+            server: charServer || ''
+        });
+
+        renderExpeditionStats(result?.stats, {
+            name: charName,
+            id: charId,
+            server: charServer || ''
+        });
+    } catch (e) {
+        content.textContent = 'Fehler beim Laden: ' + e.message;
+    }
+}
+
+function renderExpeditionStats(stats, fallback) {
+    const summary = document.getElementById('expedition-stats-summary');
+    const content = document.getElementById('expedition-stats-content');
+    summary.innerHTML = '';
+    content.innerHTML = '';
+
+    if (!stats || !stats.expeditions || Object.keys(stats.expeditions).length === 0) {
+        content.textContent = t('expeditionStats.noData');
+        content.classList.add('expedition-stats-empty');
+        return;
+    }
+
+    content.classList.remove('expedition-stats-empty');
+
+    const expeditionEntries = Object.entries(stats.expeditions);
+    expeditionEntries.sort((a, b) => (b[1]?.picked || 0) - (a[1]?.picked || 0));
+
+    let totalRuns = 0;
+    let totalHeroism = 0;
+    let maxHeroism = 0;
+    let totalKeys = 0;
+    let totalChests = 0;
+
+    expeditionEntries.forEach(([, data]) => {
+        const picked = Number(data?.picked || 0);
+        const heroismTotal = Number(data?.heroism_total || 0);
+        const heroismMax = Number(data?.heroism_max || 0);
+        const encounters = data?.encounters || {};
+        totalKeys += getEncounterCount(encounters, ['Key', 'Keys']);
+        totalChests += getEncounterCount(encounters, ['Suitcase', 'Chests']);
+        totalRuns += picked;
+        totalHeroism += heroismTotal;
+        if (heroismMax > maxHeroism) maxHeroism = heroismMax;
+    });
+
+    const overallAvg = totalRuns > 0 ? (totalHeroism / totalRuns) : 0;
+    const avgKeys = totalRuns > 0 ? (totalKeys / totalRuns) : 0;
+    const avgChests = totalRuns > 0 ? (totalChests / totalRuns) : 0;
+    const characterName = stats.character || fallback.name;
+    const serverName = stats.server || fallback.server || '-';
+
+    summary.appendChild(createSummaryCard(t('expeditionStats.character'), characterName));
+    summary.appendChild(createSummaryCard(t('expeditionStats.server'), serverName));
+    summary.appendChild(createSummaryCard(t('expeditionStats.runs'), totalRuns.toString()));
+    summary.appendChild(createSummaryCard(t('expeditionStats.heroismAvg'), overallAvg.toFixed(1)));
+    summary.appendChild(createSummaryCard(t('expeditionStats.heroismMax'), maxHeroism.toString()));
+    summary.appendChild(createSummaryCard(t('expeditionStats.keysAvg'), avgKeys.toFixed(2)));
+    summary.appendChild(createSummaryCard(t('expeditionStats.chestsAvg'), avgChests.toFixed(2)));
+
+    const grid = document.createElement('div');
+    grid.className = 'expedition-stats-grid';
+
+    expeditionEntries.forEach(([expeditionName, data]) => {
+        const card = document.createElement('div');
+        card.className = 'expedition-card';
+
+        const header = document.createElement('div');
+        header.className = 'expedition-card-header';
+
+        const title = document.createElement('div');
+        title.className = 'expedition-name';
+        title.textContent = formatExpeditionName(expeditionName);
+
+        const picked = Number(data?.picked || 0);
+        const pickedEl = document.createElement('div');
+        pickedEl.className = 'expedition-picked';
+        pickedEl.textContent = `${picked} ${t('expeditionStats.runs')}`;
+
+        header.appendChild(title);
+        header.appendChild(pickedEl);
+
+        const heroismRow = document.createElement('div');
+        heroismRow.className = 'expedition-heroism';
+
+        const heroismTotal = Number(data?.heroism_total || 0);
+        const heroismAvg = picked > 0 ? (heroismTotal / picked) : 0;
+        const heroismMax = Number(data?.heroism_max || 0);
+        const heroismLast = Number(data?.heroism_last || 0);
+
+        heroismRow.appendChild(createStatItem(t('expeditionStats.heroismAvg'), heroismAvg.toFixed(1)));
+        heroismRow.appendChild(createStatItem(t('expeditionStats.heroismMax'), heroismMax.toString()));
+        heroismRow.appendChild(createStatItem(t('expeditionStats.heroismLast'), heroismLast.toString()));
+
+        const lootRow = document.createElement('div');
+        lootRow.className = 'expedition-loot';
+        const encounters = data?.encounters || {};
+        const keysCount = getEncounterCount(encounters, ['Key', 'Keys']);
+        const chestsCount = getEncounterCount(encounters, ['Suitcase', 'Chests']);
+        const keysAvg = picked > 0 ? (keysCount / picked) : 0;
+        const chestsAvg = picked > 0 ? (chestsCount / picked) : 0;
+        lootRow.appendChild(createStatItem(t('expeditionStats.keysAvg'), keysAvg.toFixed(2)));
+        lootRow.appendChild(createStatItem(t('expeditionStats.chestsAvg'), chestsAvg.toFixed(2)));
+
+        const encountersWrapper = document.createElement('div');
+        encountersWrapper.className = 'expedition-encounters';
+
+        const encountersTitle = document.createElement('div');
+        encountersTitle.className = 'encounters-title';
+        encountersTitle.textContent = t('expeditionStats.encounters');
+        encountersWrapper.appendChild(encountersTitle);
+
+        const encounterList = document.createElement('div');
+        encounterList.className = 'encounter-list';
+
+        const encounterEntries = Object.entries(encounters);
+        encounterEntries.sort((a, b) => (b[1] || 0) - (a[1] || 0));
+
+        if (encounterEntries.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'encounter-empty';
+            empty.textContent = '-';
+            encounterList.appendChild(empty);
+        } else {
+            encounterEntries.forEach(([encounterName, count]) => {
+                const row = document.createElement('div');
+                row.className = 'encounter-row';
+
+                const nameEl = document.createElement('span');
+                nameEl.textContent = formatEncounterName(encounterName);
+
+                const countEl = document.createElement('span');
+                countEl.textContent = count.toString();
+
+                row.appendChild(nameEl);
+                row.appendChild(countEl);
+                encounterList.appendChild(row);
+            });
+        }
+
+        encountersWrapper.appendChild(encounterList);
+
+        card.appendChild(header);
+        card.appendChild(heroismRow);
+        card.appendChild(lootRow);
+        card.appendChild(encountersWrapper);
+        grid.appendChild(card);
+    });
+
+    content.appendChild(grid);
+}
+
+function createSummaryCard(label, value) {
+    const card = document.createElement('div');
+    card.className = 'expedition-summary-card';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'expedition-summary-label';
+    labelEl.textContent = label;
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'expedition-summary-value';
+    valueEl.textContent = value;
+
+    card.appendChild(labelEl);
+    card.appendChild(valueEl);
+    return card;
+}
+
+function createStatItem(label, value) {
+    const item = document.createElement('div');
+    item.className = 'heroism-item';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'heroism-label';
+    labelEl.textContent = label;
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'heroism-value';
+    valueEl.textContent = value;
+
+    item.appendChild(labelEl);
+    item.appendChild(valueEl);
+    return item;
+}
+
+function getEncounterCount(encounters, names) {
+    return names.reduce((sum, name) => sum + (Number(encounters?.[name] || 0)), 0);
+}
+
+function formatEncounterName(name) {
+    if (name === 'Suitcase') return 'Chests';
+    if (name === 'Key') return 'Keys';
+    return name;
+}
+
+function formatExpeditionName(name) {
+    return formatEncounterName(name);
+}
+
+function setupExpeditionStatsModal() {
+    document.getElementById('close-expedition-stats').addEventListener('click', () => {
+        document.getElementById('expedition-stats-modal').classList.remove('active');
+    });
+
+    document.getElementById('expedition-stats-close').addEventListener('click', () => {
+        document.getElementById('expedition-stats-modal').classList.remove('active');
     });
 }
 

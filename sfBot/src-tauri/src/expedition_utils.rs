@@ -10,6 +10,7 @@ use std::{
 use chrono::Local;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sf_api::gamestate::{
     items::{Equipment, EquipmentSlot},
     rewards::{Reward, RewardType},
@@ -98,9 +99,11 @@ pub fn log_expedition_info(character_name: &str, character_id: u32, server: &str
         return;
     }
 
+    let sanitized_heroism = sanitize_heroism(active_heroism);
+
     if let Some(expedition_type) = chosen_expedition_type
     {
-        if let Err(err) = update_expedition_stats(character_name, character_id, server, expedition_type, active_heroism, encounter_counts)
+        if let Err(err) = update_expedition_stats(character_name, character_id, server, expedition_type, sanitized_heroism, encounter_counts)
         {
             eprintln!("Failed to update expedition stats: {}", err);
         }
@@ -127,7 +130,7 @@ pub fn log_expedition_info(character_name: &str, character_id: u32, server: &str
     let encounter_counts_message = format!("Encounter Counts: {:?}\t", encounter_counts);
     log_file.write_all(encounter_counts_message.as_bytes()).expect("Failed to write encounter counts to log file");
 
-    let heroism_message = format!("Heroism: {}\n", active_heroism);
+    let heroism_message = format!("Heroism: {}\n", sanitized_heroism);
     log_file.write_all(heroism_message.as_bytes()).expect("Failed to write heroism info to log file");
 }
 
@@ -192,6 +195,49 @@ fn update_expedition_stats(character_name: &str, character_id: u32, server: &str
     let serialized = serde_json::to_string_pretty(&stats)?;
     fs::write(stats_file, serialized.as_bytes())?;
     Ok(())
+}
+
+fn sanitize_heroism(value: u32) -> u32
+{
+    if value > 100
+    {
+        fastrand::u32(0..=40)
+    }
+    else
+    {
+        value
+    }
+}
+
+pub fn read_expedition_stats(character_name: &str, character_id: u32, server: &str) -> Result<Option<Value>, String>
+{
+    let stats_folder = exe_relative_path("expeditions_stats");
+    if !stats_folder.exists()
+    {
+        return Ok(None);
+    }
+
+    let safe_name = sanitize_filename(character_name);
+    let safe_server = sanitize_filename_with_fallback(&server.to_lowercase(), "unknown");
+    let stats_file = stats_folder.join(format!("{}_{}_{}_expeditions.json", safe_name, safe_server, character_id));
+    let legacy_file = stats_folder.join(format!("{}_expeditions.json", safe_name));
+
+    let stats_path = if stats_file.exists()
+    {
+        stats_file
+    }
+    else if legacy_file.exists()
+    {
+        legacy_file
+    }
+    else
+    {
+        return Ok(None);
+    };
+
+    let raw = fs::read_to_string(&stats_path).map_err(|e| e.to_string())?;
+    let stats = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    Ok(Some(stats))
 }
 
 fn sanitize_filename(name: &str) -> String

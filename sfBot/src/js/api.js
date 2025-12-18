@@ -181,6 +181,18 @@ async function getCharacterLog(name, id) {
 }
 
 /**
+ * Get expedition stats for a character
+ * @param {string} name - Character name
+ * @param {number} id - Character ID
+ * @param {string} server - Server hostname
+ * @returns {Promise<object>}
+ */
+async function getCharacterExpeditionStats(name, id, server) {
+    const serverParam = encodeURIComponent(server || '');
+    return apiRequest(`/characters/expedition-stats?name=${encodeURIComponent(name)}&id=${id}&server=${serverParam}`);
+}
+
+/**
  * Get cached characters (for display before bot starts)
  * @returns {Promise<object>}
  */
@@ -311,6 +323,8 @@ async function invoke(cmd, args = {}) {
             return getAllCharacterSettings().then(r => r.settings);
         case 'get_character_log':
             return getCharacterLog(args.name, args.id);
+        case 'get_character_expedition_stats':
+            return getCharacterExpeditionStats(args.name, args.id, args.server);
 
         // Global settings
         case 'get_global_settings':
@@ -373,6 +387,7 @@ if (typeof window !== 'undefined') {
         getCharacterSettings,
         apiSaveCharacterSettings,
         getAllCharacterSettings,
+        getCharacterExpeditionStats,
         getCachedCharacters,
         getGlobalSettings,
         saveGlobalSettings: apiSaveGlobalSettings,
