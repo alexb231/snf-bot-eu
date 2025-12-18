@@ -583,8 +583,18 @@ function renderCharactersTable() {
         return;
     }
 
-    // Sort characters by ID to keep them in stable order
-    const sortedCharacters = [...displayCharacters].sort((a, b) => a.id - b.id);
+    // Sort: active first, then by level (desc), then name
+    const sortedCharacters = [...displayCharacters].sort((a, b) => {
+        const activeA = !!a.isActive;
+        const activeB = !!b.isActive;
+        if (activeA !== activeB) return activeA ? -1 : 1; // active above inactive
+
+        const lvlA = a.lvl || 0;
+        const lvlB = b.lvl || 0;
+        if (lvlA !== lvlB) return lvlB - lvlA; // higher level first
+
+        return (a.name || '').localeCompare(b.name || '');
+    });
 
     tbody.innerHTML = sortedCharacters.map(char => {
         // Single accounts have server set, normal accounts don't - show dash for normal accounts
