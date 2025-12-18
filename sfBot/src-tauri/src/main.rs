@@ -1,7 +1,16 @@
 #![allow(warnings)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{fs::OpenOptions, io::Write, net::SocketAddr, panic, sync::Arc};
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    net::SocketAddr,
+    panic,
+    process::Command,
+    sync::Arc,
+    thread,
+    time::Duration,
+};
 
 use axum::{
     body::Body,
@@ -18,6 +27,15 @@ use sfbot_lib::api::{self, AppState};
 use sfbot_lib::autostart_bot_if_enabled;
 use sfbot_lib::bot_runner::BotRunner;
 
+#[cfg(windows)]
+use tray_icon::{
+    menu::{Menu, MenuEvent, MenuItem},
+    Icon, TrayIconBuilder, TrayIconEvent,
+};
+#[cfg(windows)]
+use winapi::um::winuser::{DispatchMessageW, GetMessageW, TranslateMessage, MSG};
+#[cfg(windows)]
+use open;
 mod updater;
 
 // Embed frontend files into the binary at compile time
@@ -82,6 +100,10 @@ async fn main() {
     let app_state = AppState {
         bot_runner: bot_runner.clone(),
     };
+
+    // Start system tray (Windows only)
+    #[cfg(windows)]
+    start_tray_icon();
 
     // Auto-start bot based on global settings flag
     {
@@ -169,5 +191,83 @@ async fn main() {
     if let Err(e) = axum::serve(listener, app).await {
         eprintln!("Server error: {}", e);
         std::process::exit(1);
+    }
+}
+
+#[cfg(windows)]
+fn start_tray_icon() {
+    thread::spawn(|| {
+        // Build a simple red circle icon in-memory (16x16)
+        let icon = {
+            let size = 16u32;
+            let mut rgba = Vec::with_capacity((size * size * 4) as usize);
+            for y in 0..size {
+                for x in 0..size {
+                    let dx = x as f32 - (size as f32 / 2.0) + 0.5;
+                    let dy = y as f32 - (size as f32 / 2.0) + 0.5;
+                    let dist = (dx * dx + dy * dy).sqrt();
+                    if dist <= (size as f32 / 2.0) - 1.0 {
+                        rgba.extend_from_slice(&[0xf5, 0x73, 0x7a, 0xff]); // reddish circle
+                    } else {
+                        rgba.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+                    }
+                }
+            }
+            Icon::from_rgba(rgba, size, size).expect("Failed to build tray icon")
+        };
+
+        let mut menu = Menu::new();
+        let open_item = MenuItem::new("Open UI", true, None);
+        let quit_item = MenuItem::new("Quit", true, None);
+        menu.append(&open_item).ok();
+        menu.append(&quit_item).ok();
+
+        let _tray = TrayIconBuilder::new()
+            .with_icon(icon)
+            .with_menu(Box::new(menu))
+            .with_tooltip("SF Bot")
+            .build()
+            .expect("Failed to build tray icon");
+
+        println!("[TRAY] Tray icon initialized");
+
+        // Listen for menu and tray icon events; pump Windows message loop on this thread
+        let menu_rx = MenuEvent::receiver();
+        let tray_rx = TrayIconEvent::receiver();
+        unsafe {
+            let mut msg: MSG = std::mem::zeroed();
+            loop {
+                let res = GetMessageW(&mut msg, 0 as _, 0, 0);
+                if res <= 0 {
+                    break;
+                }
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+
+                // Handle tray icon click events (currently none, only menu items)
+                // We intentionally ignore direct clicks to avoid multiple opens.
+
+                // Handle menu events
+                if let Ok(event) = menu_rx.try_recv() {
+                    if event.id() == open_item.id() {
+                        println!("[TRAY] Menu: Open UI");
+                        open_ui();
+                    } else if event.id() == quit_item.id() {
+                        println!("[TRAY] Menu: Quit");
+                        std::process::exit(0);
+                    }
+                }
+            }
+        }
+    });
+}
+
+#[cfg(windows)]
+fn open_ui() {
+    // Try default browser; fallback to cmd start if needed
+    if open::that("http://localhost:3000").is_err() {
+        let _ = Command::new("cmd")
+            .args(&["/C", "start", "http://localhost:3000"])
+            .spawn();
     }
 }
