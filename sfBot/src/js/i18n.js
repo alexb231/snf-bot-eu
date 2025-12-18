@@ -359,7 +359,18 @@ const translations = {
         "expeditionStats.heroismLast": "Heroism last",
         "expeditionStats.keysAvg": "Keys avg",
         "expeditionStats.chestsAvg": "Chests avg",
-        "expeditionStats.encounters": "Encounters"
+        "expeditionStats.encounters": "Encounters",
+        // Expedition Summary
+        "expeditionSummary.button": "Expedition Overview",
+        "expeditionSummary.title": "Expedition Overview",
+        "expeditionSummary.close": "Close",
+        "expeditionSummary.loading": "Loading...",
+        "expeditionSummary.noData": "No expedition stats found",
+        "expeditionSummary.expedition": "Expedition",
+        "expeditionSummary.runs": "Expeditions",
+        "expeditionSummary.heroismAvg": "Heroism avg",
+        "expeditionSummary.keysAvg": "Keys avg",
+        "expeditionSummary.chestsAvg": "Chests avg"
     },
     de: {
         // Loading
@@ -720,7 +731,18 @@ const translations = {
         "expeditionStats.heroismLast": "Heroism Letzte",
         "expeditionStats.keysAvg": "Keys Durchschnitt",
         "expeditionStats.chestsAvg": "Chests Durchschnitt",
-        "expeditionStats.encounters": "Begegnungen"
+        "expeditionStats.encounters": "Begegnungen",
+        // Expedition Summary
+        "expeditionSummary.button": "Expeditions-Uebersicht",
+        "expeditionSummary.title": "Expeditions-Uebersicht",
+        "expeditionSummary.close": "Schliessen",
+        "expeditionSummary.loading": "Lade...",
+        "expeditionSummary.noData": "Keine Expeditions-Stats gefunden",
+        "expeditionSummary.expedition": "Expedition",
+        "expeditionSummary.runs": "Expeditionen",
+        "expeditionSummary.heroismAvg": "Heroism Durchschnitt",
+        "expeditionSummary.keysAvg": "Keys Durchschnitt",
+        "expeditionSummary.chestsAvg": "Chests Durchschnitt"
     }
 };
 

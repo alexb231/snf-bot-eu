@@ -19,7 +19,7 @@ use serde_json::Value;
 use tokio::sync::RwLock;
 
 use crate::bot_runner::{AccountInfo, BotRunner};
-use crate::expedition_utils::read_expedition_stats;
+use crate::expedition_utils::{read_expedition_stats, read_expedition_summary};
 use crate::utils::{CharacterDisplay, PlayerConfig, UserConfig};
 use crate::{generate_hash, perform_check_whether_user_is_allowed_to_start_bot};
 
@@ -395,6 +395,17 @@ pub async fn get_character_expedition_stats(Query(query): Query<ExpeditionStatsQ
     match read_expedition_stats(&query.name, query.id, &query.server) {
         Ok(Some(stats)) => (StatusCode::OK, Json(serde_json::json!({"stats": stats}))),
         Ok(None) => (StatusCode::OK, Json(serde_json::json!({"stats": null}))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e})),
+        ),
+    }
+}
+
+/// GET /api/expeditions/summary - Get aggregated expedition stats across all characters
+pub async fn get_expedition_summary() -> impl IntoResponse {
+    match read_expedition_summary() {
+        Ok(stats) => (StatusCode::OK, Json(stats)),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": e})),

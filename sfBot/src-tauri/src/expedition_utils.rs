@@ -240,6 +240,116 @@ pub fn read_expedition_stats(character_name: &str, character_id: u32, server: &s
     Ok(Some(stats))
 }
 
+pub fn read_expedition_summary() -> Result<Value, String>
+{
+    let stats_folder = exe_relative_path("expeditions_stats");
+    if !stats_folder.exists()
+    {
+        return Ok(serde_json::json!({ "expeditions": {} }));
+    }
+
+    #[derive(Default)]
+    struct AggregateStats
+    {
+        picked: u64,
+        heroism_total: u64,
+        heroism_max: u32,
+        keys: u64,
+        chests: u64,
+    }
+
+    let mut aggregated: HashMap<String, AggregateStats> = HashMap::new();
+
+    let entries = fs::read_dir(&stats_folder).map_err(|e| e.to_string())?;
+    for entry in entries
+    {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let file_type = entry.file_type().map_err(|e| e.to_string())?;
+        if !file_type.is_file()
+        {
+            continue;
+        }
+
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()).unwrap_or("") != "json"
+        {
+            continue;
+        }
+
+        let raw = match fs::read_to_string(&path)
+        {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+
+        let data: Value = match serde_json::from_str(&raw)
+        {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let expeditions = match data.get("expeditions").and_then(|v| v.as_object())
+        {
+            Some(obj) => obj,
+            None => continue,
+        };
+
+        for (expedition_name, expedition_data) in expeditions
+        {
+            let picked = expedition_data.get("picked").and_then(|v| v.as_u64()).unwrap_or(0);
+            let heroism_total = expedition_data.get("heroism_total").and_then(|v| v.as_u64()).unwrap_or(0);
+            let heroism_max = expedition_data.get("heroism_max").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+
+            let encounters = expedition_data.get("encounters").and_then(|v| v.as_object());
+            let keys = get_encounter_total(encounters, &["Key", "Keys"]);
+            let chests = get_encounter_total(encounters, &["Suitcase", "Chests"]);
+
+            let entry = aggregated.entry(expedition_name.clone()).or_default();
+            entry.picked = entry.picked.saturating_add(picked);
+            entry.heroism_total = entry.heroism_total.saturating_add(heroism_total);
+            entry.keys = entry.keys.saturating_add(keys);
+            entry.chests = entry.chests.saturating_add(chests);
+            if heroism_max > entry.heroism_max
+            {
+                entry.heroism_max = heroism_max;
+            }
+        }
+    }
+
+    let mut expeditions_json = serde_json::Map::new();
+    for (expedition_name, stats) in aggregated
+    {
+        expeditions_json.insert(
+            expedition_name,
+            serde_json::json!({
+                "picked": stats.picked,
+                "heroism_total": stats.heroism_total,
+                "heroism_max": stats.heroism_max,
+                "keys": stats.keys,
+                "chests": stats.chests
+            }),
+        );
+    }
+
+    Ok(serde_json::json!({ "expeditions": expeditions_json }))
+}
+
+fn get_encounter_total(encounters: Option<&serde_json::Map<String, Value>>, names: &[&str]) -> u64
+{
+    let mut total = 0u64;
+    if let Some(map) = encounters
+    {
+        for name in names
+        {
+            if let Some(value) = map.get(*name).and_then(|v| v.as_u64())
+            {
+                total = total.saturating_add(value);
+            }
+        }
+    }
+    total
+}
+
 fn sanitize_filename(name: &str) -> String
 {
     sanitize_filename_with_fallback(name, "character")

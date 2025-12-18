@@ -516,6 +516,12 @@ html, body {
     border-bottom: 1px solid var(--border-color);
 }
 
+.section-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .section-header h3 {
     font-size: 16px;
     font-weight: 600;
@@ -1019,6 +1025,42 @@ html, body {
 
 #expedition-stats-modal .modal-body {
     max-height: 70vh;
+}
+
+.expedition-summary-modal {
+    max-width: 1200px;
+}
+
+.expedition-summary-content.expedition-summary-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 24px 0;
+}
+
+.expedition-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.expedition-summary-table th,
+.expedition-summary-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.expedition-summary-table th {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--bg-tertiary);
+}
+
+.expedition-summary-table tbody tr:hover {
+    background: var(--bg-hover);
 }
 
 .expedition-summary-card {

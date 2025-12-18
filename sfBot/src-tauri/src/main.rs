@@ -145,6 +145,9 @@ async fn main() {
         .route("/api/characters/expedition-stats", get(api::get_character_expedition_stats))
         .route("/api/characters/cached", get(api::get_cached_characters))
 
+        // Expedition summary
+        .route("/api/expeditions/summary", get(api::get_expedition_summary))
+
         // Global settings
         .route("/api/settings", get(api::get_global_settings))
         .route("/api/settings", post(api::save_global_settings))

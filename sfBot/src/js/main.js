@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupModals();
     setupLogModal();
     setupExpeditionStatsModal();
+    setupExpeditionSummaryModal();
     setupSettingsNavigation();
 
     // Start refresh interval
@@ -143,6 +144,8 @@ function setupBotControls() {
     document.getElementById('btn-pause').addEventListener('click', togglePause);
     document.getElementById('btn-refresh').addEventListener('click', refreshData);
     document.getElementById('btn-shutdown').addEventListener('click', shutdownServer);
+    const summaryBtn = document.getElementById('btn-expedition-summary');
+    if (summaryBtn) summaryBtn.addEventListener('click', openExpeditionSummary);
 }
 
 async function shutdownServer() {
@@ -983,6 +986,16 @@ function getEncounterCount(encounters, names) {
 function formatEncounterName(name) {
     if (name === 'Suitcase') return 'Chests';
     if (name === 'Key') return 'Keys';
+    if (name === 'Cake') return 'Suckling Pig';
+    if (name === 'WinnersPodium') return 'Podium Climber';
+    if (name === 'RoyalFrog') return 'Toxic Fountain Cure';
+    if (name === 'Dragon') return 'Dragon Taming';
+    if (name === 'RevealingCouple') return 'Revealing Lady';
+    if (name === 'Balloons') return 'Bewitched Stew';
+    if (name === 'BurntCampfire') return 'Extinguished Campfire';
+    if (name === 'ToiletPaper') return 'Toilet Paper';   
+    if (name === 'BrokenSword') return 'Broken Sword'; 
+
     return name;
 }
 
@@ -997,6 +1010,91 @@ function setupExpeditionStatsModal() {
 
     document.getElementById('expedition-stats-close').addEventListener('click', () => {
         document.getElementById('expedition-stats-modal').classList.remove('active');
+    });
+}
+
+// ============================================================================
+// Expedition Summary Modal
+// ============================================================================
+
+async function openExpeditionSummary() {
+    const modal = document.getElementById('expedition-summary-modal');
+    const content = document.getElementById('expedition-summary-content');
+
+    content.textContent = t('expeditionSummary.loading');
+    content.classList.add('expedition-summary-empty');
+    modal.classList.add('active');
+
+    try {
+        const result = await invoke('get_expedition_summary');
+        renderExpeditionSummary(result?.expeditions || {});
+    } catch (e) {
+        content.textContent = 'Fehler beim Laden: ' + e.message;
+    }
+}
+
+function renderExpeditionSummary(expeditions) {
+    const content = document.getElementById('expedition-summary-content');
+    content.innerHTML = '';
+
+    const entries = Object.entries(expeditions || {});
+    if (entries.length === 0) {
+        content.textContent = t('expeditionSummary.noData');
+        content.classList.add('expedition-summary-empty');
+        return;
+    }
+    content.classList.remove('expedition-summary-empty');
+
+    entries.sort((a, b) => (b[1]?.picked || 0) - (a[1]?.picked || 0));
+
+    const table = document.createElement('table');
+    table.className = 'expedition-summary-table';
+
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th>${t('expeditionSummary.expedition')}</th>
+                <th>${t('expeditionSummary.runs')}</th>
+                <th>${t('expeditionSummary.heroismAvg')}</th>
+                <th>${t('expeditionSummary.keysAvg')}</th>
+                <th>${t('expeditionSummary.chestsAvg')}</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    `;
+
+    const tbody = table.querySelector('tbody');
+    entries.forEach(([name, data]) => {
+        const picked = Number(data?.picked || 0);
+        const heroismTotal = Number(data?.heroism_total || 0);
+        const keys = Number(data?.keys || 0);
+        const chests = Number(data?.chests || 0);
+
+        const heroismAvg = picked > 0 ? (heroismTotal / picked) : 0;
+        const keysAvg = picked > 0 ? (keys / picked) : 0;
+        const chestsAvg = picked > 0 ? (chests / picked) : 0;
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${formatExpeditionName(name)}</td>
+            <td>${picked}</td>
+            <td>${heroismAvg.toFixed(1)}</td>
+            <td>${keysAvg.toFixed(2)}</td>
+            <td>${chestsAvg.toFixed(2)}</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    content.appendChild(table);
+}
+
+function setupExpeditionSummaryModal() {
+    document.getElementById('close-expedition-summary').addEventListener('click', () => {
+        document.getElementById('expedition-summary-modal').classList.remove('active');
+    });
+
+    document.getElementById('expedition-summary-close').addEventListener('click', () => {
+        document.getElementById('expedition-summary-modal').classList.remove('active');
     });
 }
 

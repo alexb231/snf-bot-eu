@@ -193,6 +193,14 @@ async function getCharacterExpeditionStats(name, id, server) {
 }
 
 /**
+ * Get aggregated expedition stats across all characters
+ * @returns {Promise<object>}
+ */
+async function getExpeditionSummary() {
+    return apiRequest('/expeditions/summary');
+}
+
+/**
  * Get cached characters (for display before bot starts)
  * @returns {Promise<object>}
  */
@@ -325,6 +333,8 @@ async function invoke(cmd, args = {}) {
             return getCharacterLog(args.name, args.id);
         case 'get_character_expedition_stats':
             return getCharacterExpeditionStats(args.name, args.id, args.server);
+        case 'get_expedition_summary':
+            return getExpeditionSummary();
 
         // Global settings
         case 'get_global_settings':
@@ -388,6 +398,7 @@ if (typeof window !== 'undefined') {
         apiSaveCharacterSettings,
         getAllCharacterSettings,
         getCharacterExpeditionStats,
+        getExpeditionSummary,
         getCachedCharacters,
         getGlobalSettings,
         saveGlobalSettings: apiSaveGlobalSettings,
