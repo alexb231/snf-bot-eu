@@ -817,6 +817,41 @@ async fn run_account_loop(
                             }
                         };
 
+                        let is_active_identity2 = match get_character_identity(&character.name, &server)
+                        {
+                            Ok(Some(identity)) =>
+                            {
+                                let is_active = fetch_character_setting_by_identity::<bool>(&identity.name, identity.id, "settingCharacterActive").unwrap_or(false);
+                                if !is_active
+                                {
+                                    false
+                                }
+                                else
+                                {
+                                    let misc_dont_perform_actions_from: String = fetch_character_setting_by_identity(&identity.name, identity.id, "miscDontPerformActionsFrom").unwrap_or("00:00".to_string());
+                                    let misc_dont_perform_actions_to: String = fetch_character_setting_by_identity(&identity.name, identity.id, "miscDontPerformActionsTo").unwrap_or("00:01".to_string());
+                                    println!("time is in range");
+                                    !check_time_in_range(misc_dont_perform_actions_from, misc_dont_perform_actions_to)
+                                }
+                            }
+                            Ok(None) =>
+                            {
+                                println!(
+                                    "[{}] No character identity found for {} on {} while handling invalid session",
+                                    account.accname, character.name, server
+                                );
+                                true // default: count as active if no identity
+                            }
+                            Err(e) =>
+                            {
+                                println!(
+                                    "[{}] Identity error for {} on {}: {}",
+                                    account.accname, character.name, server, e
+                                );
+                                true
+                            }
+                        };
+
                         if is_active_identity
                         {
                             invalid_count += 1;
