@@ -1386,7 +1386,7 @@ function populateCharacterSettings(settings) {
         'miscPerformDailyFightNecromancer', 'miscPerformDailyFightPaladin',
         'dungeonCheckbox', 'dungeonFightDemonPortal', 'dungeonFightLowestLevel',
         'dungeonSkipIdols', 'dungeonSkipTwister', 'dungeonSkipTower', 'dungeonSkipSandstorm',
-        'arenaManagerActive',
+        'arenaManagerActive', 'arenaManagerSacrificeAfterToiletCycle',
         'toiletEnableToilet', 'toiletFlushWhenFull', 'toiletSacrificeEpics', 'toiletExcludeEpicWeapons',
         'toiletSacrificeGems', 'toiletSacrificeNormalItems'
     ];

@@ -334,6 +334,7 @@ const translations = {
         "dungeons.arenaManager": "Arena Manager",
         "dungeons.enableManager": "Enable arena manager",
         "dungeons.sacrificePercent": "Sacrifice after % of current runes",
+        "dungeons.sacrificeAfterToiletCycle": "Sacrifice after each toilet cycle",
 
         // Toilet Settings
         "toilet.title": "Toilet",
@@ -716,6 +717,7 @@ const translations = {
         "dungeons.arenaManager": "Arena Manager",
         "dungeons.enableManager": "Arena Manager aktivieren",
         "dungeons.sacrificePercent": "Opfern nach % der aktuellen Runen",
+        "dungeons.sacrificeAfterToiletCycle": "Nach jedem Toilettenzyklus opfern",
 
         // Toilet Settings
         "toilet.title": "Toilette",

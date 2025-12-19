@@ -1,7 +1,9 @@
-use std::{cmp, collections::HashMap, error::Error};
+use std::{cmp, collections::HashMap, error::Error, sync::Mutex};
 
+use chrono::{DateTime, Local};
 use enum_map::EnumMap;
 use num_bigint::BigInt;
+use once_cell::sync::Lazy;
 use sf_api::{
     command::Command,
     gamestate::idle::{IdleBuilding, IdleBuildingType},
@@ -9,7 +11,24 @@ use sf_api::{
     SimpleSession,
 };
 
-use crate::{fetch_character_setting, fortress::sleep_between_commands};
+use crate::{bot_runner::write_character_log, fetch_character_setting, fortress::sleep_between_commands};
+
+static TOILET_CYCLE_TRACKER: Lazy<Mutex<HashMap<String, DateTime<Local>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+fn sanitize_next_gather(next_gather: DateTime<Local>) -> DateTime<Local>
+{
+    if next_gather <= Local::now()
+    {
+        return Local::now() + chrono::Duration::seconds(30);
+    }
+    next_gather
+}
+
+fn build_idle_cycle_key(session: &SimpleSession, character_name: &str, character_id: u32) -> String
+{
+    let server = session.server_url().host_str().unwrap_or("unknown").to_ascii_lowercase();
+    format!("{}_{}_{}", server, character_name.to_ascii_lowercase(), character_id)
+}
 
 pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<dyn Error>>
 {
@@ -19,15 +38,16 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
         return Ok(String::from(""));
     }
     let mut sacrifice_ratio: i32 = fetch_character_setting(&gs, "arenaManagerSacrificeAfterPercent").unwrap_or(30);
-    if (sacrifice_ratio <= 0)
+    if sacrifice_ratio < 0
     {
         sacrifice_ratio = 30;
     }
-    let idle_game = match gs.idle_game
+    let idle_game = match gs.idle_game.clone()
     {
         Some(game) => game,
         None => return Ok(String::from("")),
     };
+    let sacrifice_after_toilet_cycle: bool = fetch_character_setting(&gs, "arenaManagerSacrificeAfterToiletCycle").unwrap_or(false);
     let current_runes = idle_game.current_runes.clone();
     let base = BigInt::from(10);
     let exponent = 151;
@@ -41,7 +61,68 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
 
     let runes_available_for_sacrifice = idle_game.sacrifice_runes;
 
-    if (should_sacrifice(&current_runes, &runes_available_for_sacrifice, sacrifice_ratio))
+    if sacrifice_after_toilet_cycle
+    {
+        if let Some(next_gather) = idle_game.buildings[IdleBuildingType::Toilet].next_gather
+        {
+            let key = build_idle_cycle_key(session, &gs.character.name, gs.character.player_id);
+            let sanitized_next = sanitize_next_gather(next_gather);
+            let should_sacrifice_now = {
+                let mut tracker = TOILET_CYCLE_TRACKER.lock().unwrap();
+                match tracker.get(&key).cloned()
+                {
+                    None =>
+                    {
+                        tracker.insert(key, sanitized_next);
+                        write_character_log(
+                            &gs.character.name,
+                            gs.character.player_id,
+                            &format!("TOILET_CYCLE: baseline set (next_gather={})", sanitized_next.format("%H:%M:%S")),
+                        );
+                        false
+                    }
+                    Some(prev_next) =>
+                    {
+                        if next_gather < prev_next && Local::now() < prev_next
+                        {
+                            tracker.insert(key, sanitized_next);
+                            write_character_log(
+                                &gs.character.name,
+                                gs.character.player_id,
+                                &format!("TOILET_CYCLE: updated next_gather (next_gather={})", sanitized_next.format("%H:%M:%S")),
+                            );
+                            false
+                        }
+                        else if Local::now() >= prev_next
+                        {
+                            tracker.insert(key, sanitized_next);
+                            true
+                        }
+                        else
+                        {
+                            false
+                        }
+                    }
+                }
+            };
+
+            if should_sacrifice_now
+            {
+                write_character_log(
+                    &gs.character.name,
+                    gs.character.player_id,
+                    "TOILET_CYCLE: completed -> IdleSacrifice",
+                );
+                if let Err(_err) = session.send_command(Command::IdleSacrifice).await
+                {
+                    return Ok(String::from("Server Error when IdleSacrifice"));
+                }
+                return Ok(String::from(format!("IdleSacrifice after toilet cycle. Runes: {}", current_runes)));
+            }
+        }
+    }
+
+    if sacrifice_ratio > 0 && should_sacrifice(&current_runes, &runes_available_for_sacrifice, sacrifice_ratio)
     {
         if let Err(err) = session.send_command(Command::IdleSacrifice).await
         {
