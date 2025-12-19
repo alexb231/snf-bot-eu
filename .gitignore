@@ -2635,8 +2635,6 @@ expedition_log.txt
 *.txt
 **.tyx
 *.tyx
-build.bat
-buildDev.bat
 runOnServer.bat
 /sfBot/src-tauri/deploy.sh
 /sfBot/src-tauri/latest.json

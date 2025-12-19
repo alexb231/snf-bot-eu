@@ -4,5 +4,3 @@ src/main.rs
 /cache
 /.cargo
 /character.json
-build.bat
-buildDev.bat

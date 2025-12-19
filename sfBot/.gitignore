@@ -28,8 +28,6 @@ src-tauri/userConfig.txt
 **.tyx
 *.tyx
 src-tauri/userConfig.txt
-build.bat
-buildDev.bat
 runOnServer.bat
 
 
