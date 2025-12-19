@@ -85,14 +85,16 @@ pub fn skipFunction(gs: &GameState, funcToExecute: &str) -> bool
                 skip_with_reason!(gs, funcToExecute, format!("current time before tavernPlayExpeditionFrom ({})", play_expedtion_from_str));
             }
 
-            let beers_to_drink: i32 = std::cmp::min(fetch_character_setting(&gs, "tavernDrinkBeerAmount").unwrap_or(0), 12);
+            let beers_to_drink: i32 = std::cmp::min(fetch_character_setting(&gs, "tavernDrinkBeerAmount").unwrap_or(0), 12).max(0);
             let thirst_left = gs.tavern.thirst_for_adventure_sec;
             let no_thirst_left = thirst_left == 0;
-            let out_of_shrooms = gs.character.mushrooms == 0;
             let max_beers = gs.tavern.beer_max;
             let beers_drunk = gs.tavern.beer_drunk;
-            let no_beer_left = beers_drunk >= max_beers || beers_drunk >= beers_to_drink as u8;
-            let nothing_left_todo = no_thirst_left && (no_beer_left || out_of_shrooms);
+            let target_beers = std::cmp::min(beers_to_drink as u8, max_beers);
+            let beers_needed = target_beers.saturating_sub(beers_drunk);
+            let not_enough_mushrooms_for_beers = gs.character.mushrooms < beers_needed as u32;
+            let no_beer_left = beers_drunk >= target_beers;
+            let nothing_left_todo = no_thirst_left && (no_beer_left || not_enough_mushrooms_for_beers);
             if nothing_left_todo && gs.tavern.current_action != CurrentAction::Expedition {
                 skip_with_reason!(gs, funcToExecute, format!("nothing to do: thirst={}, beers={}/{}, max_beers_setting={}, shrooms={}, action={:?}",
                     thirst_left, beers_drunk, max_beers, beers_to_drink, gs.character.mushrooms, gs.tavern.current_action));
@@ -125,14 +127,16 @@ pub fn skipFunction(gs: &GameState, funcToExecute: &str) -> bool
                 skip_with_reason!(gs, funcToExecute, format!("current time before tavernPlayExpeditionFrom ({})", play_expedtion_from_str));
             }
 
-            let beers_to_drink: i32 = std::cmp::min(fetch_character_setting(&gs, "tavernDrinkBeerAmount").unwrap_or(0), 12);
+            let beers_to_drink: i32 = std::cmp::min(fetch_character_setting(&gs, "tavernDrinkBeerAmount").unwrap_or(0), 12).max(0);
             let thirst_left = gs.tavern.thirst_for_adventure_sec;
             let no_thirst_left = thirst_left == 0;
-            let out_of_shrooms = gs.character.mushrooms == 0;
             let max_beers = gs.tavern.beer_max;
             let beers_drunk = gs.tavern.beer_drunk;
-            let no_beer_left = beers_drunk >= max_beers || beers_drunk >= beers_to_drink as u8;
-            let nothing_left_todo = no_thirst_left && (no_beer_left || out_of_shrooms);
+            let target_beers = std::cmp::min(beers_to_drink as u8, max_beers);
+            let beers_needed = target_beers.saturating_sub(beers_drunk);
+            let not_enough_mushrooms_for_beers = gs.character.mushrooms < beers_needed as u32;
+            let no_beer_left = beers_drunk >= target_beers;
+            let nothing_left_todo = no_thirst_left && (no_beer_left || not_enough_mushrooms_for_beers);
             if nothing_left_todo && gs.tavern.current_action != CurrentAction::Expedition {
                 skip_with_reason!(gs, funcToExecute, format!("nothing to do: thirst={}, beers={}/{}, max_beers_setting={}, shrooms={}, action={:?}",
                     thirst_left, beers_drunk, max_beers, beers_to_drink, gs.character.mushrooms, gs.tavern.current_action));

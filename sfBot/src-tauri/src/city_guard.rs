@@ -21,24 +21,25 @@ pub async fn city_guard(session: &mut SimpleSession) -> Result<String, Box<dyn E
     let from_time = NaiveTime::parse_from_str(&enable_city_guard_from, "%H:%M").unwrap();
     let to_time = NaiveTime::parse_from_str(&enable_city_guard_to, "%H:%M").unwrap();
     let is_in_range = check_time_in_range(enable_city_guard_from, enable_city_guard_to);
-    let beers_to_drink: i32 = std::cmp::min(fetch_character_setting(&gs, "tavernDrinkBeerAmount").unwrap_or(0), 12);
+    let beers_to_drink: i32 = std::cmp::min(fetch_character_setting(&gs, "tavernDrinkBeerAmount").unwrap_or(0), 12).max(0);
 
     let hours_of_work_at_once: i32 = fetch_character_setting(&gs, "tavernCityGuardTimeToPlay").unwrap_or(0);
     // in this case all we can do is city guard so we should do that
-    let are_expeditions_enabled: bool = fetch_character_setting(&gs, "tavernPlayExpeditions").unwrap_or(false);
     let hours_left = hours_until_to_time(to_time);
 
     let thirst_left = gs.tavern.thirst_for_adventure_sec;
     let no_thirst_left = thirst_left == 0;
-    let out_of_shrooms = gs.character.mushrooms == 0;
     let max_beers = gs.tavern.beer_max;
     // println!("max beers {}", gs.tavern.beer_max);
 
     let beers_drunk = gs.tavern.beer_drunk;
 
-    let no_beer_left = beers_drunk >= max_beers || beers_drunk >= beers_to_drink as u8;
+    let target_beers = std::cmp::min(beers_to_drink as u8, max_beers);
+    let beers_needed = target_beers.saturating_sub(beers_drunk);
+    let not_enough_mushrooms_for_beers = gs.character.mushrooms < beers_needed as u32;
+    let no_beer_left = beers_drunk >= target_beers;
     // println!("no beer left {}", no_beer_left);
-    let nothing_left_todo = (no_thirst_left && (no_beer_left || out_of_shrooms) || !are_expeditions_enabled);
+    let nothing_left_todo = no_thirst_left && (no_beer_left || not_enough_mushrooms_for_beers);
     // println!("nothing left to do {}:", nothing_left_todo);
     // println!("--------------------------------------->{:?}",
     // gs.tavern.current_action);
