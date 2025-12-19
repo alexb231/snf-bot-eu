@@ -107,14 +107,17 @@ async fn main() {
         eprintln!("Tracing already initialized: {}", e);
     }
 
-    updater::cleanup_old_backups();
-    match updater::maybe_run_update(env!("CARGO_PKG_VERSION")) {
-        Ok(true) => {
-            println!("[UPDATER] Update triggered, exiting.");
-            return;
+    #[cfg(windows)]
+    {
+        updater::cleanup_old_backups();
+        match updater::maybe_run_update(env!("CARGO_PKG_VERSION")) {
+            Ok(true) => {
+                println!("[UPDATER] Update triggered, exiting.");
+                return;
+            }
+            Ok(false) => {}
+            Err(e) => eprintln!("[UPDATER] Update check failed: {}", e),
         }
-        Ok(false) => {}
-        Err(e) => eprintln!("[UPDATER] Update check failed: {}", e),
     }
 
     println!("Initializing character settings cache...");

@@ -52,6 +52,14 @@ else
   echo "No new sfbot-linux-armv7 found."
 fi
 
+if [ -f "$SRC_DIR/sfbot-linux-i686" ]; then
+  echo "Updating sfbot-linux-i686..."
+  sudo install -m 0644 -o www-data -g www-data "$SRC_DIR/sfbot-linux-i686" "$DEST_DIR/sfbot-linux-i686"
+  rm -f "$SRC_DIR/sfbot-linux-i686"
+else
+  echo "No new sfbot-linux-i686 found."
+fi
+
 # --- charsToFight.json ---
 if [ -f "$SRC_DIR/charsToFight.json" ]; then
   echo "Updating charsToFight.json..."

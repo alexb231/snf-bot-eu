@@ -36,7 +36,7 @@ set "PATH=%ZIG_DIR%;%PATH%"
 where cargo-zigbuild >nul 2>&1 || (call :fail "cargo-zigbuild not found. Run: cargo install cargo-zigbuild" & exit /b 1)
 
 if "%~1"=="" (
-  set "TARGETS=arm64 armv7 x64"
+  set "TARGETS=arm64 armv7 x64 x86"
 ) else (
   set "TARGETS=%~1"
 )
@@ -55,6 +55,8 @@ if /I "%ARCH%"=="armv7" set "TARGET=armv7-unknown-linux-gnueabihf"
 if /I "%ARCH%"=="x64" set "TARGET=x86_64-unknown-linux-gnu"
 if /I "%ARCH%"=="x86_64" set "TARGET=x86_64-unknown-linux-gnu"
 if /I "%ARCH%"=="amd64" set "TARGET=x86_64-unknown-linux-gnu"
+if /I "%ARCH%"=="x86" set "TARGET=i686-unknown-linux-gnu"
+if /I "%ARCH%"=="i686" set "TARGET=i686-unknown-linux-gnu"
 if not defined TARGET (
   call :fail "Unknown arch: %ARCH% (use arm64 or armv7)"
   exit /b 1

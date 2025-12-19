@@ -71,8 +71,9 @@ set "UPDATE_INSTALLER_NAME=%APP_NAME%_installer.exe"
 set "UPDATE_LINUX_X64_NAME=sfbot-linux-x64"
 set "UPDATE_LINUX_ARM64_NAME=sfbot-linux-arm64"
 set "UPDATE_LINUX_ARMV7_NAME=sfbot-linux-armv7"
+set "UPDATE_LINUX_I686_NAME=sfbot-linux-i686"
 powershell -NoProfile -Command ^
-  "$platforms = [ordered]@{}; $platforms['windows-x86_64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_EXE_NAME%';installer_url='%UPDATE_BASE%/%UPDATE_INSTALLER_NAME%'}; $platforms['linux-x86_64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_X64_NAME%'}; $platforms['linux-aarch64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_ARM64_NAME%'}; $platforms['linux-armv7'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_ARMV7_NAME%'}; $obj = [ordered]@{version='%ver%';notes='Bugfixes and improvements';pub_date=(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ');platforms=$platforms}; $obj | ConvertTo-Json -Depth 5 | Out-File -FilePath '%LATEST_JSON%' -Encoding utf8"
+  "$platforms = [ordered]@{}; $platforms['windows-x86_64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_EXE_NAME%';installer_url='%UPDATE_BASE%/%UPDATE_INSTALLER_NAME%'}; $platforms['linux-x86_64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_X64_NAME%'}; $platforms['linux-aarch64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_ARM64_NAME%'}; $platforms['linux-armv7'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_ARMV7_NAME%'}; $platforms['linux-i686'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_I686_NAME%'}; $obj = [ordered]@{version='%ver%';notes='Bugfixes and improvements';pub_date=(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ');platforms=$platforms}; $obj | ConvertTo-Json -Depth 5 | Out-File -FilePath '%LATEST_JSON%' -Encoding utf8"
 
 :: === Upload ===
 set "BASH=C:\Program Files\Git\bin\bash.exe"
@@ -88,12 +89,15 @@ set "LINUX_DIST_DIR=%ROOT_DIR%\dist\pi"
 set "LINUX_X64=%LINUX_DIST_DIR%\sfbot-x86_64-unknown-linux-gnu"
 set "LINUX_ARM64=%LINUX_DIST_DIR%\sfbot-aarch64-unknown-linux-gnu"
 set "LINUX_ARMV7=%LINUX_DIST_DIR%\sfbot-armv7-unknown-linux-gnueabihf"
+set "LINUX_I686=%LINUX_DIST_DIR%\sfbot-i686-unknown-linux-gnu"
 if not exist "%LINUX_X64%" call :fail "Linux x64 build not found: %LINUX_X64%"
 if not exist "%LINUX_ARM64%" call :fail "Linux arm64 build not found: %LINUX_ARM64%"
 if not exist "%LINUX_ARMV7%" call :fail "Linux armv7 build not found: %LINUX_ARMV7%"
+if not exist "%LINUX_I686%" call :fail "Linux i686 build not found: %LINUX_I686%"
 "%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%LINUX_X64:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/%UPDATE_LINUX_X64_NAME%"
 "%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%LINUX_ARM64:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/%UPDATE_LINUX_ARM64_NAME%"
 "%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%LINUX_ARMV7:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/%UPDATE_LINUX_ARMV7_NAME%"
+"%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%LINUX_I686:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/%UPDATE_LINUX_I686_NAME%"
 
 echo === Uploading charsToFight.json ===
 "%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%PROJ_DIR:\=/%/charsToFight.json' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/"
