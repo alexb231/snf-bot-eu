@@ -115,9 +115,9 @@ pub fn read_character_log(character_name: &str, character_id: u32) -> Result<Str
 
 /// Commands to execute in order (from JS getFunctionNamesToExecute)
 const COMMANDS_TO_EXECUTE: &[&str] = &[
+    "cmd_city_guard",
     "cmd_play_expeditions_gold",
     "cmd_play_expeditions_exp",
-    "cmd_city_guard",
     "cmd_upgrade_skill_points",
     "cmd_collect_daily_and_weekly_rewards",
     "cmd_play_dice",
@@ -167,42 +167,42 @@ const COMMANDS_TO_EXECUTE: &[&str] = &[
 fn get_cooldowns() -> HashMap<&'static str, u64>
 {
     let mut cooldowns = HashMap::new();
-    cooldowns.insert("cmd_play_expeditions_gold", 15_000);
-    cooldowns.insert("cmd_play_expeditions_exp", 15_000);
-    cooldowns.insert("cmd_city_guard", 3_000);
+    cooldowns.insert("cmd_play_expeditions_gold", 5_000);
+    cooldowns.insert("cmd_play_expeditions_exp", 5_000);
+    cooldowns.insert("cmd_city_guard", 5_000);
     cooldowns.insert("cmd_upgrade_skill_points", 15 * 60_000);
     cooldowns.insert("cmd_collect_daily_and_weekly_rewards", 60 * 60_000);
-    cooldowns.insert("cmd_play_dice", 30_000);
+    cooldowns.insert("cmd_play_dice", 60_000);
     cooldowns.insert("cmd_accept_unlockables", 5 * 60_000);
     cooldowns.insert("cmd_play_idle_game", 60_000);
     cooldowns.insert("cmd_collect_fortress_resources", 30 * 60_000);
-    cooldowns.insert("cmd_use_toilet", 10 * 60_000);
+    cooldowns.insert("cmd_use_toilet", 120 * 60_000);
     cooldowns.insert("cmd_manage_inventory", 5 * 60_000);
-    cooldowns.insert("cmd_fight_demon_portal", 60_000);
-    cooldowns.insert("cmd_fight_guild_portal", 60_000);
-    cooldowns.insert("cmd_fight_dungeon_with_lowest_level", 60_000);
-    cooldowns.insert("cmd_arena_fight", 3 * 60_000);
+    cooldowns.insert("cmd_fight_demon_portal", 30 * 60_000);
+    cooldowns.insert("cmd_fight_guild_portal", 30 * 60_000);
+    cooldowns.insert("cmd_fight_dungeon_with_lowest_level", 10 * 60_000);
+    cooldowns.insert("cmd_arena_fight", 5 * 60_000);
     cooldowns.insert("cmd_enchant_items", 10 * 60_000);
-    cooldowns.insert("cmd_start_searching_for_gem", 5 * 60_000);
-    cooldowns.insert("cmd_attack_fortress", 60_000);
+    cooldowns.insert("cmd_start_searching_for_gem", 3 * 60_000);
+    cooldowns.insert("cmd_attack_fortress", 3 * 60_000);
     cooldowns.insert("cmd_train_fortress_units", 5 * 60_000);
     cooldowns.insert("cmd_perform_underworld_atk_suggested_enemy", 60_000);
     cooldowns.insert("cmd_collect_underworld_resources", 30 * 60_000);
     cooldowns.insert("cmd_build_underworld_perfect_order", 5 * 60_000);
-    cooldowns.insert("cmd_fight_pet_arena", 60_000);
+    cooldowns.insert("cmd_fight_pet_arena", 15 * 60_000);
     cooldowns.insert("cmd_check_and_swap_equipment", 10 * 60_000);
     cooldowns.insert("cmd_perform_daily_tasks", 60 * 60_000);
     cooldowns.insert("cmd_buy_mount", 60 * 60_000);
-    cooldowns.insert("cmd_spin_lucky_wheel", 60_000);
+    cooldowns.insert("cmd_spin_lucky_wheel", 10 * 60_000);
     cooldowns.insert("cmd_build_fortress_our_order", 5 * 60_000);
     cooldowns.insert("cmd_sign_up_for_guild_attack_and_defense", 60 * 60_000);
-    cooldowns.insert("cmd_fight_hydra", 60_000);
+    cooldowns.insert("cmd_fight_hydra", 30 * 60_000);
     cooldowns.insert("cmd_feed_all_pets", 60 * 60_000);
     cooldowns.insert("cmd_collect_gifts_from_mail", 5 * 60_000);
     cooldowns.insert("cmd_fight_pet_dungeon", 60_000);
     cooldowns.insert("cmd_brew_potions_using_fruits", 60 * 60_000);
     cooldowns.insert("cmd_level_up_uw_keeper", 5 * 60_000);
-    cooldowns.insert("cmd_play_hellevator", 60_000);
+    cooldowns.insert("cmd_play_hellevator", 2 * 60_000);
     cooldowns.insert("cmd_fill_scrapbook", 10 * 60_000);
     // cmd_complete has no cooldown
     cooldowns
