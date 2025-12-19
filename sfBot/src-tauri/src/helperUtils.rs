@@ -638,8 +638,6 @@ pub fn skipFunction(gs: &GameState, funcToExecute: &str) -> bool
 
         "cmd_check_and_swap_equipment" =>
         {
-            skip_with_reason!(gs, funcToExecute, "feature disabled (hardcoded)");
-            // remove once its fixed
             let enable_equip_swapping: bool = fetch_character_setting(&gs, "itemsEnableEquipmentSwap").unwrap_or(false);
             if !enable_equip_swapping {
                 skip_with_reason!(gs, funcToExecute, "itemsEnableEquipmentSwap=false");

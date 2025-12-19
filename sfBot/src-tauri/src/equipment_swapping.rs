@@ -1,179 +1,420 @@
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 
 use enum_map::Enum;
 use sf_api::{
     command::{AttributeType, Command},
     gamestate::{
         character::Class,
-        items::{BagPosition, EquipmentSlot, GemSlot, InventoryType, Item, PlayerItemPlace},
+        items::{
+            BagPosition, EquipmentSlot, Gem, GemSlot, GemType, Item, ItemType,
+            PlayerItemPlace, RuneType,
+        },
         GameState,
     },
     misc::EnumMapGet,
     SimpleSession,
 };
+
+use crate::fetch_character_setting;
 // for EquipmentSlot::into_usize()
 
-fn main_attribute_for_class(class: Class) -> AttributeType
+const EXTRA_HP_RUNE_MAX: u32 = 15;
+
+fn total_attribute(gs: &GameState, attr: AttributeType) -> u32
 {
-    use Class::*;
-    match class
+    gs.character.attribute_basis[attr]
+        + gs.character.attribute_additions[attr]
+        + gs.character.attribute_times_bought[attr]
+}
+
+fn item_attribute(item: &Item, attr: AttributeType) -> u32
+{
+    *item.attributes.get(attr)
+}
+
+fn item_has_socket(item: &Item) -> bool { item.gem_slot.is_some() }
+
+fn item_gem(item: &Item) -> Option<Gem>
+{
+    match item.gem_slot
     {
-        Bard | Mage | Druid | Necromancer => AttributeType::Intelligence,
-        Scout | Assassin | PlagueDoctor | DemonHunter => AttributeType::Dexterity,
-        Warrior | BattleMage | Berserker | Paladin => AttributeType::Strength,
+        Some(GemSlot::Filled(gem)) => Some(gem),
+        _ => None,
     }
 }
 
-fn score_item_for_class(item: &Item, main_attr: AttributeType) -> i64
+fn average_weapon_damage(item: &Item) -> Option<f64>
 {
-    let rarity_score = if item.is_legendary()
+    match item.typ
     {
-        2
+        ItemType::Weapon { min_dmg, max_dmg } =>
+            Some((f64::from(min_dmg) + f64::from(max_dmg)) / 2.0),
+        _ => None,
     }
-    else if item.is_epic()
+}
+
+fn restrict_luck_settings(gs: &GameState) -> (bool, u16)
+{
+    let restrict =
+        fetch_character_setting(gs, "itemsRestrictLuckItems").unwrap_or(false);
+    let level_diff: i32 =
+        fetch_character_setting(gs, "itemsRestrictLuckItemsLevelDiff")
+            .unwrap_or(0);
+    (restrict, level_diff.max(0) as u16)
+}
+
+fn can_equip_item(gs: &GameState, item: &Item) -> bool
+{
+    item.can_be_equipped_by(gs.character.class)
+}
+
+fn is_item_useful_for(
+    gs: &GameState,
+    item_to_check: &Item,
+    old_item: Option<&Item>,
+) -> bool
+{
+    if !can_equip_item(gs, item_to_check)
     {
-        1
+        return false;
+    }
+
+    let Some(slot) = item_to_check.typ.equipment_slot()
+    else
+    {
+        return false;
+    };
+
+    if gs.character.level >= 25
+        && !item_has_socket(item_to_check)
+        && slot != EquipmentSlot::Shield
+    {
+        return false;
+    }
+    if old_item.is_none()
+    {
+        return true;
+    }
+
+    let str_val = item_attribute(item_to_check, AttributeType::Strength);
+    let dex_val = item_attribute(item_to_check, AttributeType::Dexterity);
+    let int_val = item_attribute(item_to_check, AttributeType::Intelligence);
+    let con_val = item_attribute(item_to_check, AttributeType::Constitution);
+    let luck_val = item_attribute(item_to_check, AttributeType::Luck);
+
+    if con_val > 0
+    {
+        return true;
+    }
+
+    if luck_val > 0
+    {
+        let (restrict, level_diff) = restrict_luck_settings(gs);
+        if !restrict
+        {
+            return true;
+        }
+
+        let current_luck = total_attribute(gs, AttributeType::Luck) as f64;
+        let mut old_luck =
+            item_attribute(old_item.unwrap(), AttributeType::Luck) as f64;
+        if let Some(gem) = item_gem(old_item.unwrap())
+        {
+            if matches!(gem.typ, GemType::Luck | GemType::All)
+            {
+                old_luck += gem.value as f64;
+            }
+        }
+
+        let new_luck = current_luck + f64::from(luck_val) - old_luck;
+        let level_cap = f64::from(gs.character.level + level_diff);
+        if level_cap > 0.0
+        {
+            let crit_chance = new_luck * 5.0 / (level_cap * 2.0);
+            if crit_chance <= 50.0 && f64::from(luck_val) > old_luck
+            {
+                return true;
+            }
+        }
+    }
+
+    let main_attr = gs.character.class.main_attribute();
+    if str_val > 0 && main_attr == AttributeType::Strength
+    {
+        return true;
+    }
+    if dex_val > 0 && main_attr == AttributeType::Dexterity
+    {
+        return true;
+    }
+    if int_val > 0 && main_attr == AttributeType::Intelligence
+    {
+        return true;
+    }
+
+    if str_val == 0 && dex_val == 0
+    {
+        return int_val == 0;
+    }
+
+    false
+}
+
+fn check_item_boost(
+    gs: &GameState,
+    item_to_check: &Item,
+    check_all_possible_slots: bool,
+) -> f64
+{
+    let Some(slot) = item_to_check.typ.equipment_slot()
+    else
+    {
+        return 0.0;
+    };
+
+    if !can_equip_item(gs, item_to_check)
+    {
+        return 0.0;
+    }
+
+    let current_item = gs.character.equipment.0[slot].as_ref();
+    let mut same_type_items = vec![current_item];
+    if check_all_possible_slots
+        && slot == EquipmentSlot::Weapon
+        && gs.character.class == Class::Assassin
+    {
+        same_type_items
+            .push(gs.character.equipment.0[EquipmentSlot::Shield].as_ref());
+    }
+
+    let mut item_boost = 0.0;
+    for same_type_item in same_type_items
+    {
+        let item_to_check_value =
+            get_item_value(gs, same_type_item, Some(item_to_check));
+        let current_item_boost =
+            get_item_value(gs, Some(item_to_check), same_type_item);
+
+        if current_item_boost >= item_to_check_value
+        {
+            continue;
+        }
+
+        if current_item_boost > item_boost
+        {
+            item_boost = current_item_boost;
+        }
+    }
+
+    item_boost.min(999.99)
+}
+
+fn get_item_value(
+    gs: &GameState,
+    current_item: Option<&Item>,
+    item_to_check: Option<&Item>,
+) -> f64
+{
+    let Some(item_to_check) = item_to_check
+    else
+    {
+        return 0.0;
+    };
+
+    if current_item.is_some()
+        && item_has_socket(current_item.unwrap())
+        && !item_has_socket(item_to_check)
+    {
+        return 0.0;
+    }
+
+    let socket_boost = if current_item.is_some()
+        && !item_has_socket(current_item.unwrap())
+        && item_has_socket(item_to_check)
+    {
+        1.0
     }
     else
     {
-        0
-    } as i64;
+        0.0
+    };
 
-    let gem_bonus = match item.gem_slot
+    let main_attr = gs.character.class.main_attribute();
+    let current_item_value = current_item.map_or(0, |item| {
+        item_attribute(item, main_attr)
+            + item_attribute(item, AttributeType::Constitution)
+    });
+    let new_item_value = item_attribute(item_to_check, main_attr)
+        + item_attribute(item_to_check, AttributeType::Constitution);
+
+    let attribute_boost = if current_item_value == 0 && new_item_value == 0
     {
-        Some(GemSlot::Filled(_)) => 2,
-        Some(GemSlot::Empty) => 1,
-        None => 0,
-    } as i64;
+        0.0
+    }
+    else if current_item_value == 0
+    {
+        f64::from(new_item_value) / 1000.0
+    }
+    else if new_item_value == 0
+    {
+        -(f64::from(current_item_value) / 1000.0)
+    }
+    else
+    {
+        f64::from(new_item_value) / f64::from(current_item_value) - 1.0
+    };
 
-    let main_val = *item.attributes.get(main_attr) as i64;
+    let mut damage_boost = 0.0;
+    if let Some(new_avg) = average_weapon_damage(item_to_check)
+    {
+        let ratio = current_item
+            .and_then(average_weapon_damage)
+            .filter(|avg| *avg > 0.0)
+            .map(|avg| new_avg / avg)
+            .unwrap_or(0.2);
+        damage_boost = ratio * 5.0;
+    }
 
-    rarity_score * 1_000_000 + gem_bonus * 100_000 + main_val
+    let hp_rune_boost = get_hp_rune_value(gs, current_item, item_to_check);
+    let current_item_boost =
+        attribute_boost + hp_rune_boost + socket_boost + damage_boost;
+
+    current_item_boost * 100.0
 }
 
-fn is_better_for_slot(candidate: &Item, current: Option<&Item>, main_attr: AttributeType) -> bool
+fn get_hp_rune_value(
+    gs: &GameState,
+    current_item: Option<&Item>,
+    new_item: &Item,
+) -> f64
 {
-    match current
+    let total_hp_rune_bonus: u32 = gs
+        .character
+        .equipment
+        .0
+        .values()
+        .flatten()
+        .filter(|item| {
+            if let Some(current_item) = current_item
+            {
+                if *item == current_item
+                {
+                    return false;
+                }
+            }
+            if *item == new_item
+            {
+                return false;
+            }
+            matches!(
+                item.rune,
+                Some(rune) if rune.typ == RuneType::ExtraHitPoints
+            )
+        })
+        .map(|item| item.rune.unwrap().value as u32)
+        .sum();
+
+    if total_hp_rune_bonus >= EXTRA_HP_RUNE_MAX
     {
-        None => true,
-        Some(old) =>
-        {
-            let cand_is_epicish = candidate.is_epic() || candidate.is_legendary();
-            let old_is_epicish = old.is_epic() || old.is_legendary();
-
-            if cand_is_epicish && !old_is_epicish
-            {
-                return true;
-            }
-            if !cand_is_epicish && old_is_epicish
-            {
-                return false;
-            }
-
-            let cand_has_gem = candidate.gem_slot.is_some();
-            let old_has_gem = old.gem_slot.is_some();
-            if cand_has_gem && !old_has_gem
-            {
-                return true;
-            }
-            if !cand_has_gem && old_has_gem
-            {
-                return false;
-            }
-
-            score_item_for_class(candidate, main_attr) > score_item_for_class(old, main_attr)
-        }
+        return 0.0;
     }
+
+    let new_item_rune_hp = match new_item.rune
+    {
+        Some(rune) if rune.typ == RuneType::ExtraHitPoints =>
+            rune.value as u32,
+        _ => 0,
+    };
+    let remaining = EXTRA_HP_RUNE_MAX - total_hp_rune_bonus;
+    f64::from(new_item_rune_hp.min(remaining))
 }
 
 /// Equipment slot index expected by InventoryMove (0-based)
 fn equipment_slot_index(slot: EquipmentSlot) -> usize { slot.into_usize() }
 
+fn inventory_place_for_bag_pos(pos: BagPosition) -> (PlayerItemPlace, usize)
+{
+    let (inventory_type, inventory_pos) = pos.inventory_pos();
+    (inventory_type.player_item_position(), inventory_pos)
+}
+
 pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
 
-    let class = gs.character.class;
-    let main_attr = main_attribute_for_class(class);
+    // Best candidate per equipment slot: bag position + boost
+    let mut best_by_slot: HashMap<EquipmentSlot, (BagPosition, f64)> =
+        HashMap::new();
 
-    // Best candidate per equipment slot: (from_place, from_index)
-    let mut best_by_slot: HashMap<EquipmentSlot, usize> = HashMap::new();
-
-    for (idx, opt_item) in gs.character.inventory.backpack.iter().enumerate()
+    for (pos, opt_item) in gs.character.inventory.iter()
     {
         let Some(item) = opt_item
         else
         {
             continue;
         };
-        if !item.can_be_equipped_by(class)
-        {
-            continue;
-        }
         let Some(slot) = item.typ.equipment_slot()
         else
         {
             continue;
         };
 
+        if !can_equip_item(&gs, item)
+        {
+            continue;
+        }
+
+        let old_item = gs.character.equipment.0[slot].as_ref();
+        if !is_item_useful_for(&gs, item, old_item)
+        {
+            continue;
+        }
+
+        let boost = check_item_boost(&gs, item, true);
+        if boost <= 0.0
+        {
+            continue;
+        }
+
         let keep = match best_by_slot.get(&slot)
         {
             None => true,
-            Some(&cur_idx) =>
-            {
-                let current_best_item = get_item_ref_from(&gs, cur_idx);
-                is_better_for_slot(item, current_best_item, main_attr)
-            }
+            Some((_, best_boost)) => boost > *best_boost,
         };
 
         if keep
         {
-            best_by_slot.insert(slot, idx);
+            best_by_slot.insert(slot, (pos, boost));
         }
     }
 
-    // Plan swaps where candidate beats what's currently equipped
-    let mut planned_swaps: Vec<(PlayerItemPlace, usize, EquipmentSlot)> = Vec::new();
-    for (&slot, &idx) in best_by_slot.iter()
+    // Execute swaps where candidate beats what's currently equipped
+    let mut changes: Vec<String> = Vec::new();
+    for (&slot, &(pos, _boost)) in best_by_slot.iter()
     {
-        let candidate = get_item_ref_from(&gs, idx);
+        let candidate = get_item_ref_from(&gs, pos);
         let Some(candidate) = candidate
         else
         {
             continue;
         };
 
-        let current_equipped = gs.character.equipment.0[slot].as_ref();
-
-        if is_better_for_slot(candidate, current_equipped, main_attr)
-        {
-            session
-                .send_command(Command::InventoryMove {
-                    inventory_from: PlayerItemPlace::MainInventory,
-                    inventory_from_pos: idx,
-                    inventory_to: PlayerItemPlace::Equipment,
-                    inventory_to_pos: slot.into_usize(),
-                })
-                .await?;
-        }
-    }
-
-    // Execute moves from correct inventory → Equipment
-    let mut changes: Vec<String> = Vec::new();
-
-    for (from_place, from_idx, slot) in planned_swaps
-    {
+        let (from_place, from_pos) = inventory_place_for_bag_pos(pos);
         session
             .send_command(Command::InventoryMove {
                 inventory_from: from_place,
-                inventory_from_pos: from_idx,
+                inventory_from_pos: from_pos,
                 inventory_to: PlayerItemPlace::Equipment,
-                inventory_to_pos: slot.into_usize(),
+                inventory_to_pos: equipment_slot_index(slot),
             })
             .await?;
 
-        changes.push(format!("Equipped {:?} from {:?} pos {}.", slot, from_place, from_idx));
+        changes.push(format!(
+            "Equipped {:?} from {:?} pos {}.",
+            slot, from_place, from_pos
+        ));
     }
+
 
     if changes.is_empty()
     {
@@ -185,4 +426,11 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
     }
 }
 
-fn get_item_ref_from(gs: &GameState, idx: usize) -> Option<&Item> { gs.character.inventory.backpack.get(idx).and_then(|o| o.as_ref()) }
+fn get_item_ref_from(gs: &GameState, pos: BagPosition) -> Option<&Item>
+{
+    gs.character
+        .inventory
+        .backpack
+        .get(pos.backpack_pos())
+        .and_then(|o| o.as_ref())
+}

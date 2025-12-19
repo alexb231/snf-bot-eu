@@ -616,7 +616,7 @@ pub async fn run_func(session: &mut SimpleSession, ziel: &str, isSingle: bool, s
         "cmd_collect_underworld_resources" => cmd_collect_underworld_resources(session).await?,
         "cmd_build_underworld_perfect_order" => cmd_build_underworld_perfect_order(session).await?,
         "cmd_fight_pet_arena" => cmd_fight_pet_arena(session).await?,
-        // "cmd_check_and_swap_equipment" => cmd_check_and_swap_equipment(session).await?, // TODO: make this work
+        "cmd_check_and_swap_equipment" => cmd_check_and_swap_equipment(session).await?,
         "cmd_accept_unlockables" => cmd_accept_unlockables(session).await?,
         "cmd_perform_daily_tasks" => cmd_perform_daily_tasks(session).await?,
         "cmd_buy_mount" => cmd_buy_mount(session).await?,
