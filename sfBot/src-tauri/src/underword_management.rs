@@ -176,7 +176,7 @@ pub async fn collect_underworld_resources(session: &mut SimpleSession) -> Result
             if (enable_gold_collection && (underworld.upgrade_building != Some(UnderworldBuildingType::GoldPit) || gold_pit.level >= 25) && gold_pit.level > 0)
             {
                 let dont_collect_from: String = fetch_character_setting(&gs, "underworldDontCollectGoldFrom").unwrap_or("00:00".to_string());
-                let dont_collect_to: String = fetch_character_setting(&gs, "underworldDontCollectGoldTo").unwrap_or("00:00".to_string());
+                let dont_collect_to: String = fetch_character_setting(&gs, "underworldDontCollectGoldTo").unwrap_or("00:01".to_string());
                 let is_in_range = check_time_in_range(dont_collect_from, dont_collect_to);
                 if (!is_in_range)
                 {

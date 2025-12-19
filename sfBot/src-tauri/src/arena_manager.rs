@@ -135,7 +135,7 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
 
     // Return string
     let mut collectedUpgrades: HashMap<String, u64> = HashMap::new();
-    let mut finalMessage = String::from("Arena manager buildings upgraded by -> \n{");
+    let mut finalMessage = String::new();
     collectedUpgrades.insert("Seat".to_string(), 0);
     collectedUpgrades.insert("PopcornStand".to_string(), 0);
     collectedUpgrades.insert("ParkingLot".to_string(), 0);
@@ -187,49 +187,41 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
         sleep_between_commands(30).await;
     }
 
-    // All upgraded levels in the result map
-    let mut seatUpgrades = collectedUpgrades.get("Seat").unwrap();
-    let mut popcornStandUpgrades = collectedUpgrades.get("PopcornStand").unwrap();
-    let mut parkingLotUpgrades = collectedUpgrades.get("ParkingLot").unwrap();
-    let mut drinksUpgrades = collectedUpgrades.get("Drinks").unwrap();
-    let mut trapUpgrades = collectedUpgrades.get("DeadlyTrap").unwrap();
-    let mut vipSeatUpgrades = collectedUpgrades.get("VIPSeat").unwrap();
-    let mut snacksUpgrades = collectedUpgrades.get("Snacks").unwrap();
-    let mut monstersUpgrades = collectedUpgrades.get("StrayingMonsters").unwrap();
-    let mut toiletUpgrades = collectedUpgrades.get("Toilet").unwrap();
+    let mut message_started = false;
+    let building_entries = [
+        ("Seat", "Seat"),
+        ("PopcornStand", "PopcornStand"),
+        ("ParkingLot", "ParkingLot"),
+        ("Drinks", "Drinks"),
+        ("DeadlyTrap", "DeadlyTrap"),
+        ("VIPSeat", "VIPSeat"),
+        ("Snacks", "Snacks"),
+        ("StrayingMonsters", "StrayingMonsters"),
+        ("Toilet", "Toilet"),
+    ];
 
-    // all strings for the finalMessage, if the upgraded levels are > 20k it will be
-    // MAX
-    let mut seatUpgradesMsg = if collectedUpgrades.get("Seat").unwrap() >= &20000 { "MAX".to_string() } else { collectedUpgrades.get("Seat").unwrap().to_string() };
-    let mut popcornStandUpgradesMsg = if collectedUpgrades.get("PopcornStand").unwrap() >= &20000 { "MAX".to_string() } else { collectedUpgrades.get("PopcornStand").unwrap().to_string() };
-    let mut parkingLotUpgradesMsg = if collectedUpgrades.get("ParkingLot").unwrap() >= &20000 { "MAX".to_string() } else { collectedUpgrades.get("ParkingLot").unwrap().to_string() };
-    let mut drinksUpgradesMsg = if collectedUpgrades.get("Drinks").unwrap() >= &20000 { "MAX".to_string() } else { collectedUpgrades.get("Drinks").unwrap().to_string() };
-    let mut trapUpgradesMsg = if collectedUpgrades.get("DeadlyTrap").unwrap() >= &20000 { "MAX".to_string() } else { collectedUpgrades.get("DeadlyTrap").unwrap().to_string() };
-    let mut vipSeatUpgradesMsg = if collectedUpgrades.get("VIPSeat").unwrap() >= &20000 { "MAX".to_string() } else { collectedUpgrades.get("VIPSeat").unwrap().to_string() };
-    let mut snacksUpgradesMsg = if collectedUpgrades.get("Snacks").unwrap() >= &20000 { "MAX".to_string() } else { collectedUpgrades.get("Snacks").unwrap().to_string() };
-    let mut monstersUpgradesMsg = if collectedUpgrades.get("StrayingMonsters").unwrap() >= &20000
+    for (key, label) in building_entries
     {
-        "MAX".to_string()
+        let count = collectedUpgrades.get(key).unwrap_or(&0);
+        if *count > 0
+        {
+            if !message_started
+            {
+                finalMessage = String::from("Arena manager buildings upgraded by -> \n{");
+                message_started = true;
+            }
+            let display = if *count >= 20000 { "MAX".to_string() } else { count.to_string() };
+            finalMessage += format!("\t{}: {}\n", label, display).as_str();
+        }
     }
-    else
-    {
-        collectedUpgrades.get("StrayingMonsters").unwrap().to_string()
-    };
-
-    let mut toiletUpgradesMsg = if collectedUpgrades.get("Toilet").unwrap() >= &20000 { "MAX".to_string() } else { collectedUpgrades.get("Toilet").unwrap().to_string() };
-
-    finalMessage += format!("\tSeat: {}\n", seatUpgradesMsg).as_str();
-    finalMessage += format!("\tPopcornStand: {}\n", popcornStandUpgradesMsg).as_str();
-    finalMessage += format!("\tParkingLot: {}\n", parkingLotUpgradesMsg).as_str();
-    finalMessage += format!("\tDrinks: {}\n", drinksUpgradesMsg).as_str();
-    finalMessage += format!("\tDeadlyTrap: {}\n", trapUpgradesMsg).as_str();
-    finalMessage += format!("\tVIPSeat: {}\n", vipSeatUpgradesMsg).as_str();
-    finalMessage += format!("\tSnacks: {}\n", snacksUpgradesMsg).as_str();
-    finalMessage += format!("\tStrayingMonsters: {}\n", monstersUpgradesMsg).as_str();
-    finalMessage += format!("\tToilet: {}\n", toiletUpgradesMsg).as_str();
 
     if (collectedUpgrades.get("Error").unwrap() > &0)
     {
+        if !message_started
+        {
+            finalMessage = String::from("Arena manager -> \n{");
+            message_started = true;
+        }
         finalMessage += "An error has occured while communicating with the server\n";
     }
     if (collectedUpgrades.get("Done").unwrap() > &0)
@@ -240,10 +232,19 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
     }
     if (collectedUpgrades.get("Locked").unwrap() > &0)
     {
+        if !message_started
+        {
+            finalMessage = String::from("Arena manager -> \n{");
+            message_started = true;
+        }
         finalMessage += "Arena manager is not unlocked yet\n";
     }
-    finalMessage += "}";
-    Ok(finalMessage)
+    if message_started
+    {
+        finalMessage += "}";
+        return Ok(finalMessage);
+    }
+    Ok(String::from(""))
 }
 
 pub async fn play_idle_game_impl(session: &mut SimpleSession) -> Result<HashMap<String, u64>, Box<dyn Error>>
