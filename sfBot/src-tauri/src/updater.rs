@@ -5,6 +5,7 @@ use std::{
     error::Error,
     fs,
     fs::File,
+    fs::OpenOptions,
     io::{self, Read, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -38,10 +39,12 @@ struct UpdateInfo
 
 pub fn maybe_run_update(current_version: &str) -> Result<bool, Box<dyn Error>>
 {
+    updater_log(&format!("maybe_run_update current_version={}", current_version));
     if let Some(mode) = env::args().nth(1)
     {
         if mode == "--do-update"
         {
+            updater_log("running updater flow");
             run_updater_flow_from_args()?;
             return Ok(true);
         }
@@ -51,30 +54,55 @@ pub fn maybe_run_update(current_version: &str) -> Result<bool, Box<dyn Error>>
     {
         Ok(info) =>
         {
+            if should_skip_update(&info.version)
+            {
+                updater_log("skipping update (recent attempt)");
+                return Ok(false);
+            }
+            updater_log(&format!(
+                "update available: current={} new={} url={}",
+                current_version,
+                info.version,
+                info.platforms.windows_x86_64.url
+            ));
+            write_update_state(&info.version);
             spawn_background_updater(&info)?;
             Ok(true)
         }
-        Err(_) => Ok(false),
+        Err(e) =>
+        {
+            updater_log(&format!("update check result: {}", e));
+            Ok(false)
+        }
     }
 }
 
 fn check_for_update(current_version: &str) -> Result<UpdateInfo, Box<dyn Error>>
 {
-    let resp = reqwest::blocking::get("https://downloader.sfbot.eu/updates/latest.json")?;
+    let url = format!(
+        "https://downloader.sfbot.eu/updates/latest.json?ts={}",
+        Local::now().timestamp_millis()
+    );
+    updater_log(&format!("checking updates from {}", url));
+    let resp = reqwest::blocking::get(url)?;
     if !resp.status().is_success()
     {
         return Err(format!("update check http {}", resp.status()).into());
     }
     let body = resp.text()?;
     let info: UpdateInfo = serde_json::from_str(&body)?;
-    let available = Version::parse(&info.version)?;
-    let current = Version::parse(current_version)?;
+    let available = Version::parse(info.version.trim_start_matches('v'))?;
+    let current = Version::parse(current_version.trim_start_matches('v'))?;
     if available > current
     {
         Ok(info)
     }
     else
     {
+        updater_log(&format!(
+            "no update available (current={}, available={})",
+            current, available
+        ));
         Err("no update available".into())
     }
 }
@@ -101,6 +129,7 @@ fn spawn_background_updater(info: &UpdateInfo) -> Result<(), Box<dyn Error>>
         cmd.creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW);
     }
 
+    updater_log(&format!("spawning updater: {}", temp_updater.display()));
     cmd.spawn()?;
     Ok(())
 }
@@ -121,12 +150,18 @@ fn run_updater_flow_from_args() -> Result<(), Box<dyn Error>>
     let _new_version = env::args().nth(4).ok_or("missing version")?;
     let expected_sha = env::args().nth(5).unwrap_or_default();
 
+    updater_log(&format!(
+        "update flow: target_exe={} url={}",
+        target_exe.display(),
+        download_url
+    ));
     thread::sleep(Duration::from_millis(400));
 
     let backup = target_exe.with_extension("old");
     wait_and_rename(&target_exe, &backup, Duration::from_secs(30))?;
 
     let tmp_dl = target_exe.with_extension("download");
+    let download_url = with_cache_bust(&download_url);
     download_to_file(&download_url, &tmp_dl)?;
 
     if !expected_sha.is_empty()
@@ -144,6 +179,8 @@ fn run_updater_flow_from_args() -> Result<(), Box<dyn Error>>
 
     // schedule_delete_later(&backup);
 
+    clear_update_state();
+    updater_log("update flow finished");
     Ok(())
 }
 
@@ -272,5 +309,65 @@ fn schedule_delete_later(path: &Path)
         let p = format!(r#""{}""#, path.display());
         cmd.arg("/C").arg(format!(r#"start "" /B cmd /C "timeout /T 5 /NOBREAK >NUL & del /Q {}""#, p));
         let _ = cmd.spawn();
+    }
+}
+
+fn with_cache_bust(url: &str) -> String
+{
+    let ts = Local::now().timestamp_millis();
+    if url.contains('?')
+    {
+        format!("{url}&ts={ts}")
+    }
+    else
+    {
+        format!("{url}?ts={ts}")
+    }
+}
+
+fn update_state_path() -> PathBuf
+{
+    let mut path = env::temp_dir();
+    path.push("sfbot_update_state.txt");
+    path
+}
+
+fn should_skip_update(version: &str) -> bool
+{
+    let path = update_state_path();
+    let content = match fs::read_to_string(&path)
+    {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let mut parts = content.splitn(2, '|');
+    let last_version = parts.next().unwrap_or("");
+    let last_ts = parts.next().and_then(|v| v.parse::<i64>().ok()).unwrap_or(0);
+    let now = Local::now().timestamp();
+    let recent = now.saturating_sub(last_ts) < 300;
+    recent && last_version == version
+}
+
+fn write_update_state(version: &str)
+{
+    let path = update_state_path();
+    let ts = Local::now().timestamp();
+    let _ = fs::write(path, format!("{}|{}", version, ts));
+}
+
+fn clear_update_state()
+{
+    let path = update_state_path();
+    let _ = fs::remove_file(path);
+}
+
+fn updater_log(message: &str)
+{
+    let mut path = env::temp_dir();
+    path.push("sfbot_updater.log");
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path)
+    {
+        let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = writeln!(file, "[{}] {}", ts, message);
     }
 }
