@@ -131,11 +131,7 @@ const COMMANDS_TO_EXECUTE: &[&str] = &[
     "cmd_fight_dungeon_with_lowest_level",
     "cmd_arena_fight",
     "cmd_enchant_items",
-    "cmd_play_expeditions_gold",
-    "cmd_play_expeditions_exp",
     "cmd_start_searching_for_gem",
-    "cmd_play_expeditions_gold",
-    "cmd_play_expeditions_exp",
     "cmd_attack_fortress",
     "cmd_train_fortress_units",
     "cmd_perform_underworld_atk_suggested_enemy",
@@ -145,8 +141,6 @@ const COMMANDS_TO_EXECUTE: &[&str] = &[
     "cmd_check_and_swap_equipment",
     "cmd_perform_daily_tasks",
     "cmd_buy_mount",
-    "cmd_play_expeditions_gold",
-    "cmd_play_expeditions_exp",
     "cmd_spin_lucky_wheel",
     "cmd_build_fortress_our_order",
     "cmd_sign_up_for_guild_attack_and_defense",
@@ -167,9 +161,9 @@ const COMMANDS_TO_EXECUTE: &[&str] = &[
 fn get_cooldowns() -> HashMap<&'static str, u64>
 {
     let mut cooldowns = HashMap::new();
-    cooldowns.insert("cmd_play_expeditions_gold", 5_000);
-    cooldowns.insert("cmd_play_expeditions_exp", 5_000);
-    cooldowns.insert("cmd_city_guard", 5_000);
+    cooldowns.insert("cmd_play_expeditions_gold", 300);
+    cooldowns.insert("cmd_play_expeditions_exp", 300);
+    cooldowns.insert("cmd_city_guard", 300);
     cooldowns.insert("cmd_upgrade_skill_points", 15 * 60_000);
     cooldowns.insert("cmd_collect_daily_and_weekly_rewards", 60 * 60_000);
     cooldowns.insert("cmd_play_dice", 60_000);
@@ -192,10 +186,10 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_fight_pet_arena", 15 * 60_000);
     cooldowns.insert("cmd_check_and_swap_equipment", 10 * 60_000);
     cooldowns.insert("cmd_perform_daily_tasks", 60 * 60_000);
-    cooldowns.insert("cmd_buy_mount", 60 * 60_000);
+    cooldowns.insert("cmd_buy_mount", 15 * 60_000);
     cooldowns.insert("cmd_spin_lucky_wheel", 10 * 60_000);
     cooldowns.insert("cmd_build_fortress_our_order", 5 * 60_000);
-    cooldowns.insert("cmd_sign_up_for_guild_attack_and_defense", 60 * 60_000);
+    cooldowns.insert("cmd_sign_up_for_guild_attack_and_defense", 15 * 60_000);
     cooldowns.insert("cmd_fight_hydra", 30 * 60_000);
     cooldowns.insert("cmd_feed_all_pets", 60 * 60_000);
     cooldowns.insert("cmd_collect_gifts_from_mail", 5 * 60_000);
