@@ -57,6 +57,11 @@ pub struct CharacterInfo
 /// Maximum number of log lines to keep per character
 const MAX_LOG_LINES: usize = 10000;
 
+/// Backoff for transient network errors
+const OFFLINE_BACKOFF_BASE_MS: u64 = 5_000;
+const OFFLINE_BACKOFF_MAX_MS: u64 = 300_000;
+const OFFLINE_BACKOFF_JITTER_MS: u64 = 1_000;
+
 /// Get the log directory path (relative to EXE)
 fn log_dir() -> std::path::PathBuf { exe_relative_path("logs") }
 
@@ -398,6 +403,44 @@ fn format_current_action(action: &CurrentAction) -> String
     }
 }
 
+fn is_transient_sf_error(err: &SFError) -> bool
+{
+    matches!(
+        err,
+        SFError::ConnectionError | SFError::EmptyResponse | SFError::TooShortResponse { .. }
+    )
+}
+
+fn is_transient_error_message(msg: &str) -> bool
+{
+    let msg = msg.to_ascii_lowercase();
+    msg.contains("could not communicate with the server")
+        || msg.contains("empty response")
+        || msg.contains("connectionerror")
+        || msg.contains("connection error")
+        || msg.contains("timeout")
+        || msg.contains("timed out")
+        || msg.contains("dns")
+        || msg.contains("resolve")
+}
+
+fn compute_offline_backoff_ms(failures: u32) -> u64
+{
+    let power = failures.saturating_sub(1).min(6);
+    let multiplier = 1u64 << power;
+    let base = OFFLINE_BACKOFF_BASE_MS.saturating_mul(multiplier).min(OFFLINE_BACKOFF_MAX_MS);
+    let jitter = fastrand::u64(0..=OFFLINE_BACKOFF_JITTER_MS);
+    base.saturating_add(jitter)
+}
+
+async fn sleep_or_stop(stop_rx: &mut broadcast::Receiver<()>, duration: Duration) -> bool
+{
+    tokio::select! {
+        _ = tokio::time::sleep(duration) => false,
+        _ = stop_rx.recv() => true,
+    }
+}
+
 impl Default for BotRunner
 {
     fn default() -> Self { Self::new() }
@@ -706,6 +749,7 @@ async fn run_account_loop(
     let mut failed_attempts: HashMap<String, u32> = HashMap::new();
     let mut all_sessions_invalid = false;
     let mut invalid_count = 0;
+    let mut offline_failures: u32 = 0;
 
     println!("[{}] Starting bot loop with {} characters", account.accname, characters.len());
 
@@ -726,6 +770,7 @@ async fn run_account_loop(
         }
 
         invalid_count = 0;
+        let mut offline_backoff_triggered = false;
 
         // Process each character
         for character in characters
@@ -797,7 +842,36 @@ async fn run_account_loop(
                 let gs_result = session_state.session.send_command(Command::Update).await;
                 let gs = match gs_result
                 {
-                    Ok(gs) => gs,
+                    Ok(gs) =>
+                    {
+                        if offline_failures > 0
+                        {
+                            write_character_log(&character.name, character.id, "NETWORK: connection restored");
+                            offline_failures = 0;
+                        }
+                        gs
+                    }
+                    Err(err) if is_transient_sf_error(&err) =>
+                    {
+                        offline_failures = offline_failures.saturating_add(1);
+                        let backoff_ms = compute_offline_backoff_ms(offline_failures);
+                        write_character_log(
+                            &character.name,
+                            character.id,
+                            &format!("NETWORK: {} - retry in {}ms", err, backoff_ms),
+                        );
+                        println!(
+                            "[{}] Network issue for {}: {}, backing off {}ms",
+                            account.accname, character.name, err, backoff_ms
+                        );
+                        if sleep_or_stop(stop_rx, Duration::from_millis(backoff_ms)).await
+                        {
+                            println!("[{}] Received stop signal while waiting for network", account.accname);
+                            return true;
+                        }
+                        offline_backoff_triggered = true;
+                        break;
+                    }
                     Err(SFError::ServerError(msg)) if msg == "sessionid invalid" =>
                     {
                         println!("[{}] Session invalid for {}, marking for re-login", account.accname, character.name);
@@ -875,6 +949,16 @@ async fn run_account_loop(
                         }
                         break;
                     }
+                    Err(SFError::InvalidRequest(msg)) if msg.contains("session") =>
+                    {
+                        println!("[{}] Session invalid for {}, marking for re-login", account.accname, character.name);
+                        invalid_count += 1;
+                        if invalid_count >= characters.len()
+                        {
+                            all_sessions_invalid = true;
+                        }
+                        break;
+                    }
                     Err(e) =>
                     {
                         let error_str = e.to_string();
@@ -890,6 +974,10 @@ async fn run_account_loop(
                         continue;
                     }
                 };
+                if offline_backoff_triggered
+                {
+                    break;
+                }
 
                 // Check if character is active in settings
                 let is_active: bool = crate::fetch_character_setting(&gs, "settingCharacterActive").unwrap_or(false);
@@ -952,6 +1040,28 @@ async fn run_account_loop(
                     }
                     Err(error_msg) =>
                     {
+                        if is_transient_error_message(&error_msg)
+                        {
+                            offline_failures = offline_failures.saturating_add(1);
+                            let backoff_ms = compute_offline_backoff_ms(offline_failures);
+                            write_character_log(
+                                &character.name,
+                                character.id,
+                                &format!("NETWORK: {} - retry in {}ms", error_msg, backoff_ms),
+                            );
+                            println!(
+                                "[{}] Network issue during {}: {}, backing off {}ms",
+                                account.accname, cmd_name, error_msg, backoff_ms
+                            );
+                            if sleep_or_stop(stop_rx, Duration::from_millis(backoff_ms)).await
+                            {
+                                println!("[{}] Received stop signal while waiting for network", account.accname);
+                                return true;
+                            }
+                            offline_backoff_triggered = true;
+                            break;
+                        }
+
                         write_character_log(&character.name, character.id, &format!("ERROR: {} failed: {}", cmd_name, error_msg));
 
                         let attempts = failed_attempts.entry(char_key.clone()).or_insert(0);
@@ -1000,6 +1110,10 @@ async fn run_account_loop(
                 }
 
             }
+            if offline_backoff_triggered
+            {
+                break;
+            }
 
             // Update session state
             if account.single
@@ -1029,6 +1143,11 @@ async fn run_account_loop(
                 });
             }
 
+        }
+
+        if offline_backoff_triggered
+        {
+            continue;
         }
 
         // Sleep between full cycles (30-100ms as in JS)
