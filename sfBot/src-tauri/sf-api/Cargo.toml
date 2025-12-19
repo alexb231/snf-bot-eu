@@ -18,7 +18,7 @@ num-bigint = "0.4"
 num-derive = "0.4"
 num-traits = "0.2"
 ouroboros = "0.18"
-reqwest = { version = "0.12", features = ["gzip", "deflate"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["gzip", "deflate", "rustls-tls"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 sha1 = "0.10"

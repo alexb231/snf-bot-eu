@@ -2638,3 +2638,4 @@ expedition_log.txt
 runOnServer.bat
 /sfBot/src-tauri/deploy.sh
 /sfBot/src-tauri/latest.json
+dist
