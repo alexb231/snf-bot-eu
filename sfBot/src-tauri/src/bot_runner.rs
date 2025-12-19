@@ -1005,8 +1005,6 @@ async fn run_account_loop(
                     }
                 }
 
-                // Small delay between commands
-                tokio::time::sleep(Duration::from_millis(fastrand::u64(50..150))).await;
             }
 
             // Update session state
@@ -1037,8 +1035,6 @@ async fn run_account_loop(
                 });
             }
 
-            // Small delay between characters
-            tokio::time::sleep(Duration::from_millis(100)).await;
         }
 
         // Sleep between full cycles (30-100ms as in JS)
