@@ -63,11 +63,15 @@ pub struct CharacterStatusInfo {
     pub server: String,
     pub account: String,
     pub lvl: u32,
+    pub guild: String,
     pub gold: u64,
     pub mushrooms: i32,
     pub beers: u32,
     pub fights: u32,
     pub alu: u32,
+    pub petfights: u8,
+    pub dicerolls: u8,
+    pub current_action: String,
     #[serde(rename = "isActive")]
     pub is_active: bool,
 }

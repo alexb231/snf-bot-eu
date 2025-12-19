@@ -344,6 +344,10 @@ async function refreshBotStatus() {
                     beers: c.beers ?? cached?.beers ?? 0,
                     mushrooms: c.mushrooms ?? cached?.mushrooms ?? 0,
                     gold: c.gold ?? cached?.gold ?? 0,
+                    guild: c.guild || cached?.guild || '',
+                    petfights: c.petfights ?? cached?.petfights ?? 0,
+                    dicerolls: c.dicerolls ?? cached?.dicerolls ?? 0,
+                    current_action: c.current_action || cached?.current_action || '-',
                 };
             });
 
@@ -420,6 +424,7 @@ async function loadCachedCharacters() {
                 isActive: c.isActive,
                 mount: c.mount,
                 account: c.account,
+                current_action: '-',
                 cached: true,
                 cachedAt: c.cached_at
             }));
@@ -580,7 +585,7 @@ function renderCharactersTable() {
     if (displayCharacters.length === 0) {
         tbody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="10">${state.accountFilter ? 'Keine Charaktere fuer diesen Account.' : 'Keine Charaktere geladen. Bitte Account hinzufuegen und Bot starten.'}</td>
+                <td colspan="17">${state.accountFilter ? 'Keine Charaktere fuer diesen Account.' : 'Keine Charaktere geladen. Bitte Account hinzufuegen und Bot starten.'}</td>
             </tr>
         `;
         return;
@@ -608,6 +613,7 @@ function renderCharactersTable() {
             <td>${char.name}</td>
             <td>${char.lvl || '-'}</td>
             <td>${serverDisplay}</td>
+            <td>${char.guild || '-'}</td>
             <td>${formatNumber(char.gold || 0)}</td>
             <td>${char.mushrooms || 0}</td>
             <td>${char.luckycoins ?? 0}</td>
@@ -615,7 +621,10 @@ function renderCharactersTable() {
             <td>${char.mount || '-'}</td>
             <td>${char.beers || 0}/11</td>
             <td>${char.fights || 0}/10</td>
+            <td>${char.petfights ?? 0}</td>
+            <td>${char.dicerolls ?? 0}</td>
             <td>${char.alu || 0}</td>
+            <td>${char.current_action || '-'}</td>
             <td>
                 <button class="char-exp-stats-btn" data-char-id="${char.id}" data-char-name="${char.name}" data-char-server="${char.server || ''}">${t('table.stats')}</button>
                 <button class="char-log-btn" data-char-id="${char.id}" data-char-name="${char.name}">${t('table.log')}</button>

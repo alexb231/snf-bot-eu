@@ -16,7 +16,7 @@ use std::{
 };
 
 use chrono::{DateTime, Local};
-use sf_api::{command::Command, error::SFError, gamestate::character::Mount, SimpleSession};
+use sf_api::{command::Command, error::SFError, gamestate::character::Mount, gamestate::tavern::CurrentAction, SimpleSession};
 use serde_json::Value;
 use tokio::{
     sync::{broadcast, RwLock},
@@ -342,29 +342,36 @@ impl BotRunner
         let session_states = crate::get_all_session_states();
         let mut characters: Vec<CharacterStatusInfo> = Vec::new();
 
-        for ss in session_states
+    for ss in session_states
+    {
+        // Try to get character info from the session
+        if let Some(gs) = ss.session.game_state()
         {
-            // Try to get character info from the session
-            if let Some(gs) = ss.session.game_state()
-            {
-                // Check if character is active in settings
-                let is_active: bool = crate::fetch_character_setting(gs, "settingCharacterActive").unwrap_or(false);
+            // Check if character is active in settings
+            let is_active: bool = crate::fetch_character_setting(gs, "settingCharacterActive").unwrap_or(false);
+            let guild_name = gs.guild.as_ref().map(|g| g.name.clone()).unwrap_or_default();
+            let petfights = crate::pet_management::get_pets_left_for_pet_arena(gs).len() as u8;
+            let current_action = format_current_action(&gs.tavern.current_action);
 
-                characters.push(CharacterStatusInfo {
-                    id: gs.character.player_id,
-                    name: gs.character.name.clone(),
-                    server: ss.server.clone(),
-                    account: ss.account_name.clone(),
-                    lvl: gs.character.level as u32,
-                    gold: gs.character.silver,
-                    mushrooms: gs.character.mushrooms as i32,
-                    beers: gs.tavern.beer_drunk as u32,
-                    fights: gs.arena.fights_for_xp as u32,
-                    alu: gs.tavern.thirst_for_adventure_sec,
-                    is_active,
-                });
-            }
+            characters.push(CharacterStatusInfo {
+                id: gs.character.player_id,
+                name: gs.character.name.clone(),
+                server: ss.server.clone(),
+                account: ss.account_name.clone(),
+                lvl: gs.character.level as u32,
+                guild: guild_name,
+                gold: gs.character.silver,
+                mushrooms: gs.character.mushrooms as i32,
+                beers: gs.tavern.beer_drunk as u32,
+                fights: gs.arena.fights_for_xp as u32,
+                alu: gs.tavern.thirst_for_adventure_sec,
+                petfights,
+                dicerolls: gs.tavern.dice_game.remaining,
+                current_action,
+                is_active,
+            });
         }
+    }
 
         BotStatusResponse {
             running: self.state == BotState::Running,
@@ -383,6 +390,18 @@ impl BotRunner
 
     /// Set current character being processed
     pub fn set_current_character(&mut self, info: CurrentCharacterInfo) { self.current_character = Some(info); }
+}
+
+fn format_current_action(action: &CurrentAction) -> String
+{
+    match action
+    {
+        CurrentAction::Idle => "Idle".to_string(),
+        CurrentAction::CityGuard { .. } => "City Guard".to_string(),
+        CurrentAction::Quest { .. } => "Quest".to_string(),
+        CurrentAction::Expedition => "Expedition".to_string(),
+        CurrentAction::Unknown(_) => "Unknown".to_string(),
+    }
 }
 
 impl Default for BotRunner
