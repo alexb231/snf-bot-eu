@@ -14,8 +14,11 @@ use std::{
 };
 
 use chrono::Local;
+use reqwest::Client;
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use tokio::fs::File as TokioFile;
+use tokio::io::AsyncWriteExt;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct PlatformUpdate
@@ -37,7 +40,39 @@ struct UpdateInfo
     platforms: Platforms,
 }
 
-pub fn maybe_run_update(current_version: &str) -> Result<bool, Box<dyn Error>>
+fn build_http_client() -> Result<Client, Box<dyn Error>>
+{
+    let user_agent = format!("sfbot/{}", env!("CARGO_PKG_VERSION"));
+    let client = Client::builder().user_agent(user_agent).timeout(Duration::from_secs(30)).build()?;
+    Ok(client)
+}
+
+fn truncate_for_log(input: &str, max_len: usize) -> String
+{
+    let mut cleaned = input.replace('\r', "\\r").replace('\n', "\\n");
+    if cleaned.len() > max_len
+    {
+        cleaned.truncate(max_len);
+        cleaned.push_str("...");
+    }
+    cleaned
+}
+
+fn normalize_json_body(body: &str) -> String
+{
+    let trimmed = body.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
+    if trimmed.starts_with('{') || trimmed.starts_with('[')
+    {
+        return trimmed.to_string();
+    }
+    if let Some(idx) = trimmed.find('{').or_else(|| trimmed.find('['))
+    {
+        return trimmed[idx..].to_string();
+    }
+    trimmed.to_string()
+}
+
+pub async fn maybe_run_update(current_version: &str) -> Result<bool, Box<dyn Error>>
 {
     updater_log(&format!("maybe_run_update current_version={}", current_version));
     if let Some(mode) = env::args().nth(1)
@@ -45,12 +80,12 @@ pub fn maybe_run_update(current_version: &str) -> Result<bool, Box<dyn Error>>
         if mode == "--do-update"
         {
             updater_log("running updater flow");
-            run_updater_flow_from_args()?;
+            run_updater_flow_from_args().await?;
             return Ok(true);
         }
     }
 
-    match check_for_update(current_version)
+    match check_for_update(current_version).await
     {
         Ok(info) =>
         {
@@ -77,20 +112,43 @@ pub fn maybe_run_update(current_version: &str) -> Result<bool, Box<dyn Error>>
     }
 }
 
-fn check_for_update(current_version: &str) -> Result<UpdateInfo, Box<dyn Error>>
+async fn check_for_update(current_version: &str) -> Result<UpdateInfo, Box<dyn Error>>
 {
     let url = format!(
         "https://downloader.sfbot.eu/updates/latest.json?ts={}",
         Local::now().timestamp_millis()
     );
     updater_log(&format!("checking updates from {}", url));
-    let resp = reqwest::blocking::get(url)?;
-    if !resp.status().is_success()
+    let client = build_http_client()?;
+    let resp = client.get(url).send().await?;
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let body = resp.text().await?;
+    if !status.is_success()
     {
-        return Err(format!("update check http {}", resp.status()).into());
+        let snippet = truncate_for_log(&body, 300);
+        return Err(format!("update check http {} body={}", status, snippet).into());
     }
-    let body = resp.text()?;
-    let info: UpdateInfo = serde_json::from_str(&body)?;
+    let cleaned_body = normalize_json_body(&body);
+    let info: UpdateInfo = match serde_json::from_str(&cleaned_body)
+    {
+        Ok(info) => info,
+        Err(e) =>
+        {
+            let snippet = truncate_for_log(&body, 300);
+            let cleaned_snippet = truncate_for_log(&cleaned_body, 300);
+            updater_log(&format!(
+                "update check parse error: {} content-type={} body={} cleaned_body={}",
+                e, content_type, snippet, cleaned_snippet
+            ));
+            return Err(format!("update check parse error: {}", e).into());
+        }
+    };
     let available = Version::parse(info.version.trim_start_matches('v'))?;
     let current = Version::parse(current_version.trim_start_matches('v'))?;
     if available > current
@@ -143,7 +201,7 @@ fn unique_temp_exe(prefix: &str) -> Result<PathBuf, Box<dyn Error>>
     Ok(path)
 }
 
-fn run_updater_flow_from_args() -> Result<(), Box<dyn Error>>
+async fn run_updater_flow_from_args() -> Result<(), Box<dyn Error>>
 {
     let target_exe = PathBuf::from(env::args().nth(2).ok_or("missing target_exe")?);
     let download_url = env::args().nth(3).ok_or("missing download_url")?;
@@ -162,7 +220,7 @@ fn run_updater_flow_from_args() -> Result<(), Box<dyn Error>>
 
     let tmp_dl = target_exe.with_extension("download");
     let download_url = with_cache_bust(&download_url);
-    download_to_file(&download_url, &tmp_dl)?;
+    download_to_file(&download_url, &tmp_dl).await?;
 
     if !expected_sha.is_empty()
     {
@@ -235,15 +293,19 @@ fn wait_and_rename(from: &Path, to: &Path, timeout: Duration) -> Result<(), Box<
     }
 }
 
-fn download_to_file(url: &str, dest: &Path) -> Result<(), Box<dyn Error>>
+async fn download_to_file(url: &str, dest: &Path) -> Result<(), Box<dyn Error>>
 {
-    let mut resp = reqwest::blocking::get(url)?;
+    let client = build_http_client()?;
+    let mut resp = client.get(url).send().await?;
     if !resp.status().is_success()
     {
         return Err(format!("download http {}", resp.status()).into());
     }
-    let mut out = File::create(dest)?;
-    io::copy(&mut resp, &mut out)?;
+    let mut out = TokioFile::create(dest).await?;
+    while let Some(chunk) = resp.chunk().await?
+    {
+        out.write_all(&chunk).await?;
+    }
     Ok(())
 }
 

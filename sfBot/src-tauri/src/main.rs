@@ -110,7 +110,7 @@ async fn main() {
     #[cfg(windows)]
     {
         updater::cleanup_old_backups();
-        match updater::maybe_run_update(env!("CARGO_PKG_VERSION")) {
+        match updater::maybe_run_update(env!("CARGO_PKG_VERSION")).await {
             Ok(true) => {
                 println!("[UPDATER] Update triggered, exiting.");
                 return;
