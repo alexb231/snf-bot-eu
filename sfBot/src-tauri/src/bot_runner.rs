@@ -169,7 +169,7 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     let mut cooldowns = HashMap::new();
     cooldowns.insert("cmd_play_expeditions_gold", 15_000);
     cooldowns.insert("cmd_play_expeditions_exp", 15_000);
-    cooldowns.insert("cmd_city_guard", 60_000);
+    cooldowns.insert("cmd_city_guard", 3_000);
     cooldowns.insert("cmd_upgrade_skill_points", 15 * 60_000);
     cooldowns.insert("cmd_collect_daily_and_weekly_rewards", 60 * 60_000);
     cooldowns.insert("cmd_play_dice", 30_000);
