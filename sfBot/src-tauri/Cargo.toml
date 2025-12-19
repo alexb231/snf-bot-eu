@@ -42,7 +42,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # HTTP Client (for external API calls)
-reqwest = { version = "0.12.12", features = ["json", "blocking"] }
+reqwest = { version = "0.12.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
 
 # Crypto/Hashing
 sha1 = "0.10.6"
