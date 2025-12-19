@@ -10,7 +10,8 @@ if %errorlevel% neq 0 (
 )
 
 :: === STEP 1: Navigate to project directory ===
-set "PROJ_DIR=C:\Users\hello\RustroverProjects\snf\sfBot\src-tauri"
+set "ROOT_DIR=C:\Users\hello\RustroverProjects\snf"
+set "PROJ_DIR=%ROOT_DIR%\sfBot\src-tauri"
 cd /d "%PROJ_DIR%" || call :fail "Project dir not found: %PROJ_DIR%"
 
 :: === Hardcoded names ===
@@ -36,6 +37,14 @@ cargo build --release || call :fail "Cargo build failed"
 for %%p in ("%APP_NAME%.exe" "%BIN_NAME%.exe") do taskkill /F /IM "%%~p" 2>nul
 timeout /t 2 /nobreak >nul
 
+:: === Build Linux targets (cross) ===
+set "BUILD_PI=%ROOT_DIR%\build_pi.bat"
+if not exist "%BUILD_PI%" (
+    call :fail "build_pi.bat not found: %BUILD_PI%"
+)
+echo === Building Linux targets (cross) ===
+call "%BUILD_PI%" || call :fail "Linux cross-build failed"
+
 :: === Ensure distribution exe name ===
 set "BIN_EXE=%PROJ_DIR%\target\release\%BIN_NAME%.exe"
 set "DIST_EXE=%PROJ_DIR%\target\release\%APP_NAME%.exe"
@@ -59,8 +68,11 @@ set "LATEST_JSON=%PROJ_DIR%\latest.json"
 set "UPDATE_BASE=https://downloader.sfbot.eu/updates"
 set "UPDATE_EXE_NAME=%APP_NAME%.exe"
 set "UPDATE_INSTALLER_NAME=%APP_NAME%_installer.exe"
+set "UPDATE_LINUX_X64_NAME=sfbot-linux-x64"
+set "UPDATE_LINUX_ARM64_NAME=sfbot-linux-arm64"
+set "UPDATE_LINUX_ARMV7_NAME=sfbot-linux-armv7"
 powershell -NoProfile -Command ^
-  "$obj = [ordered]@{version='%ver%';notes='Bugfixes and improvements';pub_date=(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ');platforms=@{'windows-x86_64'=@{url='%UPDATE_BASE%/%UPDATE_EXE_NAME%';installer_url='%UPDATE_BASE%/%UPDATE_INSTALLER_NAME%'}}};$obj | ConvertTo-Json -Depth 5 | Out-File -FilePath '%LATEST_JSON%' -Encoding utf8"
+  "$platforms = [ordered]@{}; $platforms['windows-x86_64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_EXE_NAME%';installer_url='%UPDATE_BASE%/%UPDATE_INSTALLER_NAME%'}; $platforms['linux-x86_64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_X64_NAME%'}; $platforms['linux-aarch64'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_ARM64_NAME%'}; $platforms['linux-armv7'] = [ordered]@{url='%UPDATE_BASE%/%UPDATE_LINUX_ARMV7_NAME%'}; $obj = [ordered]@{version='%ver%';notes='Bugfixes and improvements';pub_date=(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ');platforms=$platforms}; $obj | ConvertTo-Json -Depth 5 | Out-File -FilePath '%LATEST_JSON%' -Encoding utf8"
 
 :: === Upload ===
 set "BASH=C:\Program Files\Git\bin\bash.exe"
@@ -71,11 +83,31 @@ set "REMOTE_DIR=/home/ubuntu/sfrustscript"
 echo === Uploading exe ===
 "%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%DIST_EXE:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/"
 
+echo === Uploading linux builds ===
+set "LINUX_DIST_DIR=%ROOT_DIR%\dist\pi"
+set "LINUX_X64=%LINUX_DIST_DIR%\sfbot-x86_64-unknown-linux-gnu"
+set "LINUX_ARM64=%LINUX_DIST_DIR%\sfbot-aarch64-unknown-linux-gnu"
+set "LINUX_ARMV7=%LINUX_DIST_DIR%\sfbot-armv7-unknown-linux-gnueabihf"
+if not exist "%LINUX_X64%" call :fail "Linux x64 build not found: %LINUX_X64%"
+if not exist "%LINUX_ARM64%" call :fail "Linux arm64 build not found: %LINUX_ARM64%"
+if not exist "%LINUX_ARMV7%" call :fail "Linux armv7 build not found: %LINUX_ARMV7%"
+"%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%LINUX_X64:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/%UPDATE_LINUX_X64_NAME%"
+"%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%LINUX_ARM64:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/%UPDATE_LINUX_ARM64_NAME%"
+"%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%LINUX_ARMV7:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/%UPDATE_LINUX_ARMV7_NAME%"
+
 echo === Uploading charsToFight.json ===
 "%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%PROJ_DIR:\=/%/charsToFight.json' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/"
 
 echo === Uploading latest.json ===
 "%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%LATEST_JSON:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/"
+
+echo === Uploading update.sh ===
+set "UPDATE_SH=%PROJ_DIR%\update.sh"
+if exist "%UPDATE_SH%" (
+    "%BASH%" -c "scp -i ~/.ssh/id_ed25519 '%UPDATE_SH:\=/%' %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/update.sh"
+) else (
+    echo [WARN] update.sh not found: %UPDATE_SH%
+)
 
 :: === Remote update.sh ===
 "%BASH%" -c "ssh -i ~/.ssh/id_ed25519 %REMOTE_USER%@%REMOTE_HOST% 'bash %REMOTE_DIR%/update.sh'"

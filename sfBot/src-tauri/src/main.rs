@@ -38,6 +38,21 @@ use winapi::um::winuser::{DispatchMessageW, GetMessageW, TranslateMessage, MSG};
 use open;
 mod updater;
 
+#[cfg(target_os = "linux")]
+fn suppress_console_output() {
+    use std::os::unix::io::AsRawFd;
+    let devnull = match std::fs::OpenOptions::new().write(true).open("/dev/null") {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+    let fd = devnull.as_raw_fd();
+    unsafe {
+        libc::dup2(fd, libc::STDOUT_FILENO);
+        libc::dup2(fd, libc::STDERR_FILENO);
+    }
+    std::mem::forget(devnull);
+}
+
 // Embed frontend files into the binary at compile time
 #[derive(Embed)]
 #[folder = "../src/"]
@@ -81,6 +96,10 @@ async fn serve_frontend(uri: Uri) -> Response<Body> {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() {
+    #[cfg(target_os = "linux")]
+    if !cfg!(debug_assertions) {
+        suppress_console_output();
+    }
     println!("Starting SF Bot Server...");
 
     // Initialize logging
