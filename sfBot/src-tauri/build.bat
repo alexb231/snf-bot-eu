@@ -37,14 +37,6 @@ cargo build --release || call :fail "Cargo build failed"
 for %%p in ("%APP_NAME%.exe" "%BIN_NAME%.exe") do taskkill /F /IM "%%~p" 2>nul
 timeout /t 2 /nobreak >nul
 
-:: === Build Linux targets (cross) ===
-set "BUILD_PI=%ROOT_DIR%\build_pi.bat"
-if not exist "%BUILD_PI%" (
-    call :fail "build_pi.bat not found: %BUILD_PI%"
-)
-echo === Building Linux targets (cross) ===
-call "%BUILD_PI%" || call :fail "Linux cross-build failed"
-
 :: === Ensure distribution exe name ===
 set "BIN_EXE=%PROJ_DIR%\target\release\%BIN_NAME%.exe"
 set "DIST_EXE=%PROJ_DIR%\target\release\%APP_NAME%.exe"
@@ -62,6 +54,14 @@ if not exist "%LOCAL_COPY_DIR%" (
 )
 echo === Copying %APP_NAME%.exe to mains ===
 copy /Y "%DIST_EXE%" "%LOCAL_COPY_DIR%\" || call :fail "Local copy failed"
+
+:: === Build Linux targets (cross) ===
+set "BUILD_PI=%ROOT_DIR%\build_pi.bat"
+if not exist "%BUILD_PI%" (
+    call :fail "build_pi.bat not found: %BUILD_PI%"
+)
+echo === Building Linux targets (cross) ===
+call "%BUILD_PI%" || call :fail "Linux cross-build failed"
 
 :: === Create latest.json (UTF-8 without BOM) ===
 set "LATEST_JSON=%PROJ_DIR%\latest.json"
