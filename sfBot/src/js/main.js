@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function checkServerConnection() {
     try {
-        const response = await fetch('http://localhost:3000/api/version');
+        const response = await fetch('/api/version');
         return response.ok;
     } catch (e) {
         console.error('Server not reachable:', e);

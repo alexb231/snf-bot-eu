@@ -2,10 +2,10 @@
  * SF Bot HTTP API Client
  *
  * This replaces the Tauri invoke() calls with fetch() to the Rust HTTP server.
- * The server runs on http://localhost:3000
+ * The server runs on the same origin as the UI
  */
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 /**
  * Make an API request

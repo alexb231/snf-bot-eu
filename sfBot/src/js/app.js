@@ -62,7 +62,7 @@ async function checkServerConnection() {
     const statusEl = document.getElementById('connection-status');
 
     try {
-        const response = await fetch('http://localhost:3000/api/version');
+        const response = await fetch('/api/version');
         if (response.ok) {
             if (statusEl) {
                 statusEl.textContent = 'Connected';
