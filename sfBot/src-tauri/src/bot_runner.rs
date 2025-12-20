@@ -875,7 +875,10 @@ async fn run_account_loop(
                     {
                         // Log skip while blacklisted (show remaining seconds)
                         let remaining = (entry.expiry - Local::now()).num_seconds().max(0);
-                        write_character_log(&character.name, character.id, &format!("BLACKLIST_SKIP: still {}s left", remaining));
+                        println!(
+                            "[{}] BLACKLIST_SKIP: still {}s left",
+                            character.name, remaining
+                        );
                         continue; // Still blacklisted
                     }
                     else
@@ -920,7 +923,12 @@ async fn run_account_loop(
                             // Log cooldown skips (except cmd_complete)
                             if *cmd_name != "cmd_complete"
                             {
-                                write_character_log(&character.name, character.id, &format!("COOLDOWN: {} (until {})", cmd_name, expiry.format("%H:%M:%S")));
+                                println!(
+                                    "[{}] COOLDOWN: {} (until {})",
+                                    character.name,
+                                    cmd_name,
+                                    expiry.format("%H:%M:%S")
+                                );
                             }
                             continue; // On cooldown
                         }
@@ -1114,7 +1122,13 @@ async fn run_account_loop(
                             // Log cooldown set
                             if *cmd_name != "cmd_complete"
                             {
-                                write_character_log(&character.name, character.id, &format!("COOLDOWN_SET: {} -> {}ms (until {})", cmd_name, cooldown_ms, expiry.format("%H:%M:%S")));
+                                println!(
+                                    "[{}] COOLDOWN_SET: {} -> {}ms (until {})",
+                                    character.name,
+                                    cmd_name,
+                                    cooldown_ms,
+                                    expiry.format("%H:%M:%S")
+                                );
                             }
                         }
                         else
@@ -1122,7 +1136,10 @@ async fn run_account_loop(
                             // No cooldown defined for this command!
                             if *cmd_name != "cmd_complete"
                             {
-                                write_character_log(&character.name, character.id, &format!("NO_COOLDOWN_DEFINED: {} - will run again immediately!", cmd_name));
+                                println!(
+                                    "[{}] NO_COOLDOWN_DEFINED: {} - will run again immediately!",
+                                    character.name, cmd_name
+                                );
                             }
                         }
                         failed_attempts.remove(&char_key);
@@ -1158,7 +1175,10 @@ async fn run_account_loop(
 
                         if *attempts >= 3
                         {
-                            write_character_log(&character.name, character.id, &format!("SKIP: {} failed 3 times, skipping", cmd_name));
+                            println!(
+                                "[{}] SKIP: {} failed 3 times, skipping",
+                                character.name, cmd_name
+                            );
                             *attempts = 0;
                         }
 

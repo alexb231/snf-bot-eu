@@ -1072,8 +1072,8 @@ pub async fn cmd_play_expeditions_gold(session: &mut SimpleSession) -> Result<St
 
     let is_in_range = Local::now().time() > play_expedtion_from_time;
 
-    // Debug logging
-    crate::bot_runner::write_character_log(name, char_id, &format!(
+    // Debug logging (console only)
+    println!(
         "EXPEDITION_GOLD_DEBUG: enabled={}, play_gold_exp='{}', is_in_range={}, time_from={}, current_time={}, mount={:?}, thirst={}, beers={}/{}, current_action={:?}",
         enable_expeditions,
         play_gold_expeditions,
@@ -1085,7 +1085,7 @@ pub async fn cmd_play_expeditions_gold(session: &mut SimpleSession) -> Result<St
         gs.tavern.beer_drunk,
         gs.tavern.beer_max,
         gs.tavern.current_action
-    ));
+    );
 
     if (enable_expeditions && is_in_range && play_gold_expeditions == "tavernPlayExpExpeditionGold")
     {

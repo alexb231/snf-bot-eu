@@ -117,7 +117,9 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
                 {
                     return Ok(String::from("Server Error when IdleSacrifice"));
                 }
-                return Ok(String::from(format!("IdleSacrifice after toilet cycle. Runes: {}", current_runes)));
+                let result = format!("IdleSacrifice after toilet cycle. Runes: {}", current_runes);
+                write_character_log(&gs.character.name, gs.character.player_id, &format!("ARENA_MANAGER: {}", result));
+                return Ok(String::from(result));
             }
         }
     }
@@ -130,7 +132,9 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
             // command: {}", err);
             return Ok(String::from("Server Error when IdleSacrifice"));
         }
-        return Ok(String::from(format!("IdleSacrifice complete. Runes: {}", current_runes)));
+        let result = format!("IdleSacrifice complete. Runes: {}", current_runes);
+        write_character_log(&gs.character.name, gs.character.player_id, &format!("ARENA_MANAGER: {}", result));
+        return Ok(String::from(result));
     }
 
     // Return string
@@ -241,6 +245,7 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
     if message_started
     {
         finalMessage += "}";
+        write_character_log(&gs.character.name, gs.character.player_id, &format!("ARENA_MANAGER: {}", finalMessage));
         return Ok(finalMessage);
     }
     Ok(String::from(""))

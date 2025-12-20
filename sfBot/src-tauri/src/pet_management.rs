@@ -106,6 +106,36 @@ pub async fn feed_all_pets(session: &mut SimpleSession, feed_pets: bool, expensi
     Ok("".to_string())
 }
 
+async fn refresh_pet_state(
+    session: &mut SimpleSession,
+    habitat_type: HabitatType,
+    pet_id: u32,
+) -> Result<Option<(u16, u16, usize, usize)>, Box<dyn Error>>
+{
+    let gs = session.send_command(Command::Update).await?.clone();
+    let pets = match &gs.pets
+    {
+        Some(pets) => pets,
+        None => return Ok(None),
+    };
+
+    let habitat = &pets.habitats[habitat_type];
+    let fruits_available = habitat.fruits as usize;
+    let total_fruits = (pets.habitats[HabitatType::Shadow].fruits
+        + pets.habitats[HabitatType::Light].fruits
+        + pets.habitats[HabitatType::Earth].fruits
+        + pets.habitats[HabitatType::Fire].fruits
+        + pets.habitats[HabitatType::Water].fruits) as usize;
+
+    let pet = match habitat.pets.iter().find(|pet| pet.id == pet_id)
+    {
+        Some(pet) => pet,
+        None => return Ok(None),
+    };
+
+    Ok(Some((pet.level, pet.fruits_today, fruits_available, total_fruits)))
+}
+
 pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired_levels_vec: Vec<Option<(u32, u16)>>, habitat_type: HabitatType, max_pets_to_a_day: usize) -> Result<String, Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
@@ -125,7 +155,7 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
     let mut fruits_available = match gs.pets
     {
         None => return Ok(("".to_string())),
-        Some(ref pets) => pets.habitats[habitat_type].fruits,
+        Some(ref pets) => pets.habitats[habitat_type].fruits as usize,
     };
     let mut total_fruits = get_total_available_fruit_count(gs.pets);
 
@@ -152,19 +182,37 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
     // feed partially fed pet
     if let Some((index, pet)) = partially_fed_pet
     {
-        while pet.fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
+        let mut pet_level = pet.level;
+        let mut pet_fruits_today = pet.fruits_today;
+        while pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
         {
-            if (pet.level == 100 || pet.level == 200)
+            if (pet_level == 100 || pet_level == 200)
             {
                 break;
             }
 
             session.send_command(Command::PetFeed { pet_id: pet.id, fruit_idx: total_fruits as u32 }).await?;
             feed_counter += 1;
-            fruits_available -= 1;
-            total_fruits -= 1;
+            if let Some((level, fruits_today, new_fruits, new_total)) =
+                refresh_pet_state(session, habitat_type, pet.id).await?
+            {
+                pet_level = level;
+                pet_fruits_today = fruits_today;
+                fruits_available = new_fruits;
+                total_fruits = new_total;
+            }
+            else
+            {
+                break;
+            }
 
-            let msg = format!("Partially completed feeding pet with ID {} at index {} current level: {}, feeds: {}", pet.id, index, pet.level, pet.fruits_today + 1);
+            let msg = format!(
+                "Partially completed feeding pet with ID {} at index {} current level: {}, feeds: {}",
+                pet.id,
+                index,
+                pet_level,
+                pet_fruits_today
+            );
             shitty_print(msg);
         }
     }
@@ -178,12 +226,24 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
                 continue;
             }
 
-            while pet.level < *desired_level && pet.fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
+            let mut pet_level = pet.level;
+            let mut pet_fruits_today = pet.fruits_today;
+            while pet_level < *desired_level && pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
             {
                 session.send_command(Command::PetFeed { pet_id: pet.id, fruit_idx: total_fruits as u32 }).await?;
                 feed_counter += 1;
-                fruits_available -= 1;
-                total_fruits -= 1;
+                if let Some((level, fruits_today, new_fruits, new_total)) =
+                    refresh_pet_state(session, habitat_type, pet.id).await?
+                {
+                    pet_level = level;
+                    pet_fruits_today = fruits_today;
+                    fruits_available = new_fruits;
+                    total_fruits = new_total;
+                }
+                else
+                {
+                    break;
+                }
 
                 if feed_counter >= max_feeds_per_day
                 {
@@ -236,14 +296,26 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
                 continue;
             }
 
-            while pet.fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
+            let mut pet_level = pet.level;
+            let mut pet_fruits_today = pet.fruits_today;
+            while pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
             {
                 session.send_command(Command::PetFeed { pet_id: pet.id, fruit_idx: total_fruits as u32 }).await?;
                 feed_counter += 1;
-                fruits_available -= 1;
-                total_fruits -= 1;
+                if let Some((level, fruits_today, new_fruits, new_total)) =
+                    refresh_pet_state(session, habitat_type, pet.id).await?
+                {
+                    pet_level = level;
+                    pet_fruits_today = fruits_today;
+                    fruits_available = new_fruits;
+                    total_fruits = new_total;
+                }
+                else
+                {
+                    break;
+                }
 
-                let msg = format!("Fed pet with ID {} at index {} level: {}", pet.id, index, pet.level);
+                let msg = format!("Fed pet with ID {} at index {} level: {}", pet.id, index, pet_level);
                 shitty_print(msg);
 
                 if feed_counter >= max_feeds_per_day

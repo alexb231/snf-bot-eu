@@ -401,6 +401,7 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
 
     // Execute swaps where candidate beats what's currently equipped
     let mut changes: Vec<String> = Vec::new();
+    let mut swapped_slots: Vec<String> = Vec::new();
     for (&slot, &(pos, _boost)) in best_by_slot.iter()
     {
         let candidate = get_item_ref_from(&gs, pos);
@@ -420,6 +421,7 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
             })
             .await?;
 
+        swapped_slots.push(format!("{:?}", slot));
         changes.push(format!(
             "Equipped {:?} from {:?} pos {}.",
             slot, from_place, from_pos
@@ -429,14 +431,6 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
 
     if changes.is_empty()
     {
-        write_character_log(
-            &gs.character.name,
-            gs.character.player_id,
-            &format!(
-                "EQUIP_SWAP: scanned={} equipable={} useful={} boosted={} min_passed={} min={}",
-                scanned, equipable, useful, boosted, min_passed, min_boost_percent
-            ),
-        );
         Ok("No better gear found to equip from main/extended inventory.".to_string())
     }
     else
@@ -445,8 +439,9 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
             &gs.character.name,
             gs.character.player_id,
             &format!(
-                "EQUIP_SWAP: scanned={} equipable={} useful={} boosted={} min_passed={} min={} swapped={}",
-                scanned, equipable, useful, boosted, min_passed, min_boost_percent, changes.len()
+                "EQUIP_SWAP: swapped={} slots=[{}]",
+                changes.len(),
+                swapped_slots.join(", ")
             ),
         );
         Ok(format!("Swapped equipment:\n{}", changes.join("\n")))

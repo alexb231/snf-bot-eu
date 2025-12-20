@@ -17,7 +17,6 @@ use sf_api::{
 };
 
 use crate::{
-    bot_runner::write_character_log,
     city_guard::sleep_between_commands,
     dungeon_management::fight_dungeon_with_highest_win_rate,
     fetch_character_setting,
@@ -31,10 +30,12 @@ use crate::{
 /// Helper macro to log skip reason and return true
 macro_rules! skip_with_reason {
     ($gs:expr, $func:expr, $reason:expr) => {{
-        write_character_log(
-            &$gs.character.name,
+        println!(
+            "[{}:{}] SKIP_REASON: {} - {}",
+            $gs.character.name,
             $gs.character.player_id,
-            &format!("SKIP_REASON: {} - {}", $func, $reason),
+            $func,
+            $reason
         );
         return true;
     }};
