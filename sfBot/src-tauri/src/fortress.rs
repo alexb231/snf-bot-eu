@@ -574,32 +574,51 @@ pub async fn build_fortress_our_order(session: &mut SimpleSession) -> Result<Str
 
         if let Some(building_to_upgrade) = find_next_building(fortress, true)
         {
-            let current_amount_wood = &fortress.resources[Wood].current;
-            let current_amount_stone = &fortress.resources[Stone].current;
+            let current_amount_wood = fortress.resources[Wood].current;
+            let current_amount_stone = fortress.resources[Stone].current;
             let character_silver = gs.character.silver;
 
-            let building_prices = fortress.buildings[building_to_upgrade].upgrade_cost;
-
-            let silver_required = building_prices.silver;
-            let wood_required = building_prices.wood;
-            let stone_required = building_prices.stone;
-
-            let has_enough_resources = current_amount_wood >= &wood_required && &current_amount_stone >= &&stone_required && character_silver >= silver_required;
-
-            if building_to_upgrade == FortressBuildingType::FortressGroupBonusUpgrade && has_enough_resources
+            if building_to_upgrade == FortressBuildingType::FortressGroupBonusUpgrade
             {
-                session.send_command(Command::FortressUpgradeHallOfKnights).await?;
-                return Ok("Upgrading Hall of Knights".to_string());
+                let hall_cost = fortress.hall_of_knights_upgrade_price;
+                let has_enough_resources = current_amount_wood >= hall_cost.wood
+                    && current_amount_stone >= hall_cost.stone
+                    && character_silver >= hall_cost.silver;
+
+                if has_enough_resources
+                {
+                    match session.send_command(Command::FortressUpgradeHallOfKnights).await
+                    {
+                        Ok(_) => return Ok("Upgrading Hall of Knights".to_string()),
+                        Err(SFError::ServerError(msg)) if is_fortress_resource_error(&msg) => return Ok("".to_string()),
+                        Err(err) => return Err(err.into()),
+                    }
+                }
             }
-            else if has_enough_resources
+            else if fortress.can_build(building_to_upgrade, character_silver)
             {
-                session.send_command(Command::FortressBuild { f_type: building_to_upgrade }).await?;
-                return Ok(format!("Upgrading: {}", get_building_name(building_to_upgrade)).to_string());
+                match session.send_command(Command::FortressBuild { f_type: building_to_upgrade }).await
+                {
+                    Ok(_) => return Ok(format!("Upgrading: {}", get_building_name(building_to_upgrade)).to_string()),
+                    Err(SFError::ServerError(msg)) if is_fortress_resource_error(&msg) => return Ok("".to_string()),
+                    Err(err) => return Err(err.into()),
+                }
             }
         }
     }
 
     Ok("".to_string())
+}
+
+fn is_fortress_resource_error(msg: &str) -> bool
+{
+    let msg = msg.to_ascii_lowercase();
+    msg.contains("need more wood")
+        || msg.contains("need more stone")
+        || msg.contains("need more silver")
+        || msg.contains("not enough wood")
+        || msg.contains("not enough stone")
+        || msg.contains("not enough silver")
 }
 
 fn get_building_name(p0: FortressBuildingType) -> String
