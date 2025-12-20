@@ -10,13 +10,15 @@ use sf_api::{
 };
 use tokio::time::sleep;
 
-use crate::fetch_character_setting;
+use crate::{bot_runner::write_character_log, fetch_character_setting};
 
 pub async fn sleep_between_spins(ms: u64) { sleep(Duration::from_millis(ms)).await; }
 
 pub async fn spin_lucky_wheel(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
-    let gs = session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let mut wheel_spins: i32 = fetch_character_setting(&gs, "quartersSpinLuckyWithResourcesAmount").unwrap_or(0);
     let resource_for_spinning: String = fetch_character_setting(&gs, "quartersSpinLuckyWithResources").unwrap_or("".to_string());
     let free_slots = &gs.character.inventory.count_free_slots();
@@ -50,21 +52,29 @@ pub async fn spin_lucky_wheel(session: &mut SimpleSession) -> Result<String, Box
             if new_gs.specials.wheel.clone().spins_today < 1
             {
                 let _result = free_spin(session).await;
+                write_character_log(&character_name, character_id, "WHEEL: Spun (payment: Free)");
                 return Ok(String::from("Performed ree lucky wheel spin"));
             }
             else
             {
                 // TODO correct check needs to be implemented here not only lucky coins
-                if session.send_command(Command::Update).await?.specials.wheel.clone().lucky_coins >= 10 || (get_resource_from_setting(resource_for_spinning.as_str()) == FortunePayment::Mushrooms && new_gs.character.mushrooms > 0)
+                let payment = get_resource_from_setting(resource_for_spinning.as_str());
+                if session.send_command(Command::Update).await?.specials.wheel.clone().lucky_coins >= 10 || (payment == FortunePayment::Mushrooms && new_gs.character.mushrooms > 0)
                 {
                     match session
                         .send_command(Command::SpinWheelOfFortune {
-                            payment: get_resource_from_setting(resource_for_spinning.as_str()),
+                            payment,
                         })
                         .await
                     {
                         Ok(_) =>
-                        {}
+                        {
+                            write_character_log(
+                                &character_name,
+                                character_id,
+                                &format!("WHEEL: Spun (payment: {:?})", payment),
+                            );
+                        }
                         Err(SFError::ServerError(msg)) if msg == "need a free slot" =>
                         {
                             return Ok(String::from(""));

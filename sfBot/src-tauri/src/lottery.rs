@@ -13,13 +13,15 @@ use sf_api::{
 };
 use tokio::time::sleep;
 
-use crate::fetch_character_setting;
+use crate::{bot_runner::write_character_log, fetch_character_setting};
 
 pub async fn sleep_between_commands(ms: u64) { sleep(Duration::from_millis(ms)).await; }
 
 pub async fn play_dice(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
-    let gamestate = session.send_command(Command::Update).await?;
+    let mut gamestate = session.send_command(Command::Update).await?.clone();
+    let character_name = gamestate.character.name.clone();
+    let character_id = gamestate.character.player_id;
     let dice_game = &gamestate.tavern.dice_game.clone();
     let skip_wait_time_settings: bool = fetch_character_setting(&gamestate, "tavernDiceGameSkipUsingHG").unwrap_or(false);
     let hourglas_count = &gamestate.tavern.quicksand_glasses;
@@ -27,7 +29,7 @@ pub async fn play_dice(session: &mut SimpleSession) -> Result<String, Box<dyn st
 
     if (dice_game.next_free.is_none())
     {
-        if (!checkIfDiceGameOpen(gamestate))
+        if (!checkIfDiceGameOpen(&mut gamestate))
         {
             return Ok(String::from(""));
         }
@@ -65,6 +67,7 @@ pub async fn play_dice(session: &mut SimpleSession) -> Result<String, Box<dyn st
                 if (flag)
                 {
                     // won in round 1
+                    write_character_log(&character_name, character_id, "DICE: Won dice game in round 1");
                     return Ok(String::from("Won Dice game in round 1"));
                 }
                 else if !flag
@@ -92,6 +95,7 @@ pub async fn play_dice(session: &mut SimpleSession) -> Result<String, Box<dyn st
 
     if did_play
     {
+        write_character_log(&character_name, character_id, "DICE: Played dice game");
         Ok("played dice game".to_string())
     }
     else
