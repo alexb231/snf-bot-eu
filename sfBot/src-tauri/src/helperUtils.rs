@@ -27,16 +27,18 @@ use crate::{
     witch_enchantment::should_enchant,
 };
 
-/// Helper macro to log skip reason and return true
 macro_rules! skip_with_reason {
     ($gs:expr, $func:expr, $reason:expr) => {{
-        println!(
-            "[{}:{}] SKIP_REASON: {} - {}",
-            $gs.character.name,
-            $gs.character.player_id,
-            $func,
-            $reason
-        );
+        if false
+        {
+            println!(
+                "[{}:{}] SKIP_REASON: {} - {}",
+                $gs.character.name,
+                $gs.character.player_id,
+                $func,
+                $reason
+            );
+        }
         return true;
     }};
 }

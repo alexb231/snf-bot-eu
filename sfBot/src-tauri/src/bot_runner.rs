@@ -924,12 +924,13 @@ async fn run_account_loop(
                             // Log cooldown skips (except cmd_complete)
                             if *cmd_name != "cmd_complete"
                             {
+                                if(false){
                                 println!(
                                     "[{}] COOLDOWN: {} (until {})",
                                     character.name,
                                     cmd_name,
                                     expiry.format("%H:%M:%S")
-                                );
+                                );}
                             }
                             continue; // On cooldown
                         }
@@ -1093,18 +1094,8 @@ async fn run_account_loop(
                     continue;
                 }
 
-                // Log command execution (only for active characters after skip check)
-                println!("[{}] Executing command: {}", character.name, cmd_name);
-
-                // Track current action
                 set_current_character_obj(account.accname.clone(), character.name.clone(), character.id, cmd_name.to_string());
 
-                // Log to character-specific file (skip internal commands)
-                if *cmd_name != "cmd_complete"
-                {
-                    // no per-command "executing" log to reduce log spam
-                }
-                // Execute the command
                 let cmd_result: Result<(), String> = {
                     let result = run_func(&mut session_state.session, cmd_name, account.single, if account.single { &account.server } else { "" }).await;
                     result.map(|_| ()).map_err(|e| e.to_string())
@@ -1123,6 +1114,7 @@ async fn run_account_loop(
                             // Log cooldown set
                             if *cmd_name != "cmd_complete"
                             {
+                                if (false) {
                                 println!(
                                     "[{}] COOLDOWN_SET: {} -> {}ms (until {})",
                                     character.name,
@@ -1131,17 +1123,20 @@ async fn run_account_loop(
                                     expiry.format("%H:%M:%S")
                                 );
                             }
+                            }
                         }
                         else
                         {
                             // No cooldown defined for this command!
                             if *cmd_name != "cmd_complete"
                             {
+                                if (false) {
                                 println!(
                                     "[{}] NO_COOLDOWN_DEFINED: {} - will run again immediately!",
                                     character.name, cmd_name
                                 );
                             }
+                        }
                         }
                         failed_attempts.remove(&char_key);
                     }
@@ -1185,7 +1180,6 @@ async fn run_account_loop(
 
                         if error_msg.contains("Invalid Session") || error_msg.contains("sessionid invalid")
                         {
-                            // Blacklist this character for a configured cooloff
                             let bl_seconds = match crate::utils::get_global_settings().await {
                                 Ok(settings) => settings
                                     .get("doNotRelogCharacterSeconds")
