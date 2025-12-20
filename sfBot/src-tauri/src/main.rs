@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
+    fs,
     fs::OpenOptions,
     io::Write,
     net::SocketAddr,
@@ -20,12 +21,14 @@ use axum::{
 };
 use chrono::Local;
 use rust_embed::Embed;
+use serde::Deserialize;
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 
 use sfbot_lib::api::{self, AppState};
 use sfbot_lib::autostart_bot_if_enabled;
 use sfbot_lib::bot_runner::BotRunner;
+use sfbot_lib::paths;
 
 #[cfg(windows)]
 use tray_icon::{
@@ -94,6 +97,33 @@ async fn serve_frontend(uri: Uri) -> Response<Body> {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct ServerConfig {
+    port: Option<u16>,
+}
+
+fn load_server_port() -> u16 {
+    let default_port = 3000;
+    let config_path = paths::get_server_config_path();
+    let contents = match fs::read_to_string(&config_path) {
+        Ok(data) => data,
+        Err(_) => return default_port,
+    };
+
+    let config: ServerConfig = match serde_json::from_str(&contents) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("[SERVER] Failed to parse {}: {}", config_path.display(), e);
+            return default_port;
+        }
+    };
+
+    match config.port {
+        Some(port) if port > 0 => port,
+        _ => default_port,
+    }
+}
+
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() {
     #[cfg(target_os = "linux")]
@@ -133,9 +163,11 @@ async fn main() {
         bot_runner: bot_runner.clone(),
     };
 
+    let port = load_server_port();
+
     // Start system tray (Windows only)
     #[cfg(windows)]
-    start_tray_icon();
+    start_tray_icon(port);
 
     // Auto-start bot based on global settings flag
     {
@@ -205,7 +237,7 @@ async fn main() {
         .with_state(app_state);
 
     // Start the server
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     println!("");
     println!("========================================");
     println!("  SF Bot Server running!");
@@ -213,13 +245,13 @@ async fn main() {
     println!("  Frontend: embedded in binary");
     println!("========================================");
     println!("");
-    println!("Open http://localhost:3000 in your browser");
+    println!("Open http://localhost:{} in your browser", port);
 
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(l) => l,
         Err(e) => {
             eprintln!("");
-            eprintln!("ERROR: Could not bind to port 3000!");
+            eprintln!("ERROR: Could not bind to port {}!", port);
             eprintln!("Reason: {}", e);
             eprintln!("");
             eprintln!("Another instance of sfbot might already be running.");
@@ -236,8 +268,8 @@ async fn main() {
 }
 
 #[cfg(windows)]
-fn start_tray_icon() {
-    thread::spawn(|| {
+fn start_tray_icon(port: u16) {
+    thread::spawn(move || {
         let icon = load_tray_icon();
 
         let mut menu = Menu::new();
@@ -275,7 +307,7 @@ fn start_tray_icon() {
                 if let Ok(event) = menu_rx.try_recv() {
                     if event.id() == open_item.id() {
                         println!("[TRAY] Menu: Open UI");
-                        open_ui();
+                        open_ui(port);
                     } else if event.id() == quit_item.id() {
                         println!("[TRAY] Menu: Quit");
                         std::process::exit(0);
@@ -296,11 +328,12 @@ fn load_tray_icon() -> Icon {
 }
 
 #[cfg(windows)]
-fn open_ui() {
+fn open_ui(port: u16) {
     // Try default browser; fallback to cmd start if needed
-    if open::that("http://localhost:3000").is_err() {
+    let url = format!("http://localhost:{}", port);
+    if open::that(&url).is_err() {
         let _ = Command::new("cmd")
-            .args(&["/C", "start", "http://localhost:3000"])
+            .args(&["/C", "start", &url])
             .spawn();
     }
 }

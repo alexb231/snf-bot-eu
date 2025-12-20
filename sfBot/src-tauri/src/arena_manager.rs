@@ -211,11 +211,11 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
         {
             if !message_started
             {
-                finalMessage = String::from("Arena manager buildings upgraded by -> \n{");
+                finalMessage = String::from("Arena manager buildings upgraded by -> ");
                 message_started = true;
             }
             let display = if *count >= 20000 { "MAX".to_string() } else { count.to_string() };
-            finalMessage += format!("\t{}: {}\n", label, display).as_str();
+            finalMessage += format!("\t{}: {}", label, display).as_str();
         }
     }
 
@@ -223,7 +223,7 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
     {
         if !message_started
         {
-            finalMessage = String::from("Arena manager -> \n{");
+            finalMessage = String::from("Arena manager -> ");
             message_started = true;
         }
         finalMessage += "An error has occured while communicating with the server\n";
@@ -238,7 +238,7 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
     {
         if !message_started
         {
-            finalMessage = String::from("Arena manager -> \n{");
+            finalMessage = String::from("Arena manager -> ");
             message_started = true;
         }
     }

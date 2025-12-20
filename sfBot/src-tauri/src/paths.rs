@@ -34,3 +34,8 @@ pub fn get_global_settings_path() -> PathBuf {
 pub fn get_user_config_path() -> PathBuf {
     exe_relative_path("userConfig.json")
 }
+
+/// Get path for serverConfig.json
+pub fn get_server_config_path() -> PathBuf {
+    exe_relative_path("serverConfig.json")
+}

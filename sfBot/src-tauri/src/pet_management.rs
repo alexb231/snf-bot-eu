@@ -6,6 +6,7 @@ use chrono::{DateTime, Local};
 use serde_json::json;
 use sf_api::{
     command::{AttributeType, Command},
+    error::SFError,
     gamestate::{
         rewards::Event,
         unlockables::{HabitatExploration, HabitatType, Pet, Pets},
@@ -136,6 +137,24 @@ async fn refresh_pet_state(
     Ok(Some((pet.level, pet.fruits_today, fruits_available, total_fruits)))
 }
 
+async fn try_feed_pet(session: &mut SimpleSession, pet_id: u32, fruit_idx: u32) -> Result<bool, Box<dyn Error>>
+{
+    match session.send_command(Command::PetFeed { pet_id, fruit_idx }).await
+    {
+        Ok(_) => Ok(true),
+        Err(SFError::ServerError(msg)) =>
+        {
+            if msg.contains("maxed out")
+            {
+                Ok(false)
+            } else {
+                Err(Box::new(SFError::ServerError(msg)))
+            }
+        }
+        Err(e) => Err(Box::new(e)),
+    }
+}
+
 pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired_levels_vec: Vec<Option<(u32, u16)>>, habitat_type: HabitatType, max_pets_to_a_day: usize) -> Result<String, Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
@@ -151,6 +170,7 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
     let pet_max_feed_amount = if events.contains(&Event::AssemblyOfAwesomeAnimals) { 9 } else { 3 };
     let max_feeds_per_day = pet_max_feed_amount * max_pets_to_a_day;
     let mut feed_counter = 0;
+    let pet_max_level = gs.pets.as_ref().map(|pets| pets.max_pet_level).unwrap_or(200);
 
     let mut fruits_available = match gs.pets
     {
@@ -186,12 +206,16 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
         let mut pet_fruits_today = pet.fruits_today;
         while pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
         {
-            if (pet_level == 100 || pet_level == 200)
+            if pet_level >= pet_max_level
             {
                 break;
             }
 
-            session.send_command(Command::PetFeed { pet_id: pet.id, fruit_idx: total_fruits as u32 }).await?;
+            if !try_feed_pet(session, pet.id, total_fruits as u32).await?
+            {
+                pet_level = pet_max_level;
+                break;
+            }
             feed_counter += 1;
             if let Some((level, fruits_today, new_fruits, new_total)) =
                 refresh_pet_state(session, habitat_type, pet.id).await?
@@ -221,16 +245,21 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
     {
         if let Some(Some((pet_id, desired_level))) = desired_levels_vec.get(*index)
         {
-            if pet.level >= *desired_level || pet.fruits_today >= pet_max_feed_amount as u16
+            let desired_level = (*desired_level).min(pet_max_level);
+            if pet.level >= desired_level || pet.fruits_today >= pet_max_feed_amount as u16
             {
                 continue;
             }
 
             let mut pet_level = pet.level;
             let mut pet_fruits_today = pet.fruits_today;
-            while pet_level < *desired_level && pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
+            while pet_level < desired_level && pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
             {
-                session.send_command(Command::PetFeed { pet_id: pet.id, fruit_idx: total_fruits as u32 }).await?;
+                if !try_feed_pet(session, pet.id, total_fruits as u32).await?
+                {
+                    pet_level = pet_max_level;
+                    break;
+                }
                 feed_counter += 1;
                 if let Some((level, fruits_today, new_fruits, new_total)) =
                     refresh_pet_state(session, habitat_type, pet.id).await?
@@ -291,16 +320,23 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
     {
         for (index, pet) in available_pets.iter()
         {
-            if pet.fruits_today >= pet_max_feed_amount as u16 || pet.level >= 200
+            if pet.fruits_today >= pet_max_feed_amount as u16 || pet.level >= pet_max_level
             {
                 continue;
             }
 
             let mut pet_level = pet.level;
             let mut pet_fruits_today = pet.fruits_today;
-            while pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
+            while pet_fruits_today < pet_max_feed_amount as u16
+                && pet_level < pet_max_level
+                && feed_counter < max_feeds_per_day
+                && fruits_available > 0
             {
-                session.send_command(Command::PetFeed { pet_id: pet.id, fruit_idx: total_fruits as u32 }).await?;
+                if !try_feed_pet(session, pet.id, total_fruits as u32).await?
+                {
+                    pet_level = pet_max_level;
+                    break;
+                }
                 feed_counter += 1;
                 if let Some((level, fruits_today, new_fruits, new_total)) =
                     refresh_pet_state(session, habitat_type, pet.id).await?

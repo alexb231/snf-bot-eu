@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use sf_api::{
     command::Command,
     gamestate::{
-        dungeons::{Dungeon, DungeonType::Light, Dungeons, LightDungeon, ShadowDungeon},
+        dungeons::{Dungeon, DungeonProgress, DungeonType::Light, Dungeons, LightDungeon, ShadowDungeon},
         GameState,
     },
     misc::EnumMapGet,
@@ -75,8 +75,24 @@ pub async fn fight_dungeon_with_highest_win_rate(session: &mut SimpleSession) ->
 
         if is_fight_free && gs.character.inventory.count_free_slots() > 0
         {
-            session.send_command(Command::FightDungeon { dungeon: target_dungeon, use_mushroom: false }).await?;
-            return Ok(format!("Fighting {:?} (lvl {}) - estimated winrate {:.1}%", target_dungeon, target_monster.level, winrate * 100.0));
+            match target_dungeon
+            {
+                Dungeon::Light(LightDungeon::Tower) =>
+                {
+                    let current_level = match gs.dungeons.light[LightDungeon::Tower]
+                    {
+                        DungeonProgress::Open { finished } => finished.saturating_add(1) as u8,
+                        _ => return Ok(String::from("")),
+                    };
+                    session.send_command(Command::FightTower { current_level, use_mush: false }).await?;
+                    return Ok(format!("Fighting Tower lvl {} (enemy lvl {}) - estimated winrate {:.1}%", current_level, target_monster.level, winrate * 100.0));
+                }
+                _ =>
+                {
+                    session.send_command(Command::FightDungeon { dungeon: target_dungeon, use_mushroom: false }).await?;
+                    return Ok(format!("Fighting {:?} (lvl {}) - estimated winrate {:.1}%", target_dungeon, target_monster.level, winrate * 100.0));
+                }
+            }
         }
     }
 
