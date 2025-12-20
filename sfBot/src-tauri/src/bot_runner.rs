@@ -191,7 +191,7 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_collect_underworld_resources", 30 * 60_000);
     cooldowns.insert("cmd_build_underworld_perfect_order", 5 * 60_000);
     cooldowns.insert("cmd_fight_pet_arena", 15 * 60_000);
-    cooldowns.insert("cmd_check_and_swap_equipment", 3 * 60_000);
+    cooldowns.insert("cmd_check_and_swap_equipment", 15 * 60_000);
     cooldowns.insert("cmd_perform_daily_tasks", 60 * 60_000);
     cooldowns.insert("cmd_buy_mount", 15 * 60_000);
     cooldowns.insert("cmd_spin_lucky_wheel", 10 * 60_000);
