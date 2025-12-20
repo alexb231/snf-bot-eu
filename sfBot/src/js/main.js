@@ -263,13 +263,6 @@ function updateBotUI() {
         pauseBtnTextEl.nextSibling.textContent = ' ' + (state.paused ? t('header.resume') : t('header.pause'));
     }
 
-    // Update current action
-    const actionEl = document.getElementById('current-action');
-    if (!state.running) {
-        actionEl.textContent = t('dashboard.botNotStarted');
-    } else if (state.paused) {
-        actionEl.textContent = t('dashboard.botPaused');
-    }
 }
 
 // ============================================================================
@@ -293,14 +286,6 @@ async function refreshBotStatus() {
         state.paused = status.paused;
 
         updateBotUI();
-
-        // Update current action
-        if (status.current_character) {
-            const cc = status.current_character;
-            document.getElementById('current-action').textContent = `${cc.name}: ${cc.current_action}`;
-        } else if (state.running) {
-            document.getElementById('current-action').textContent = t('dashboard.waitingForAction');
-        }
 
         // Update characters from status - merge with cached inactive characters
         if (status.characters && status.characters.length > 0) {

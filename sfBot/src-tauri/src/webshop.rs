@@ -243,7 +243,7 @@ fn is_rate_limit_message(message: &str) -> bool {
 }
 
 fn random_coupon_delay_ms() -> u64 {
-    fastrand::u64(10_000..20_001)
+    fastrand::u64(6_000..15_001)
 }
 
 async fn fetch_server_id_map() -> WebshopResult<HashMap<String, i32>> {
