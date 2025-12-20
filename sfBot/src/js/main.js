@@ -25,14 +25,17 @@ const state = {
 const REFRESH_INTERVAL = 5000;
 
 // Priority lists (with defaults)
-let expeditionPriorityList = [
+const DEFAULT_EXPEDITION_PRIORITY_LIST = [
     "Mushrooms", "Gold", "Wood", "Stone", "Arcane Splinter",
     "Metal", "Souls", "Pet Egg", "Quicksand Glasses", "Fruit Basket", "Lucky coins"
 ];
 
-let dicePriorityList = [
+const DEFAULT_DICE_PRIORITY_LIST = [
     "Gold", "HourGlass", "Reroll", "Souls", "Arcane Splinter", "Wood", "Stone"
 ];
+
+let expeditionPriorityList = [...DEFAULT_EXPEDITION_PRIORITY_LIST];
+let dicePriorityList = [...DEFAULT_DICE_PRIORITY_LIST];
 
 // ============================================================================
 // Initialization
@@ -1306,7 +1309,7 @@ function setupSettingsNavigation() {
     renderPriorityList('dice-priority-list', dicePriorityList);
 }
 
-async function openCharacterSettings(charId, charName) {
+async function openCharacterSettings(charId, charName, options = {}) {
     setApplyAllMode(false);
     state.currentCharacter = { id: charId, name: charName };
 
@@ -1322,23 +1325,29 @@ async function openCharacterSettings(charId, charName) {
         section.classList.toggle('active', i === 0);
     });
 
-    // Load settings
-    try {
-        console.log('Loading settings for:', charName, charId);
-        const settings = await invoke('load_character_settings', {
-            charactername: charName,
-            characterid: charId
-        }) || {};
-
-        console.log('Loaded settings:', settings);
-        state.currentCharacterSettings = settings;
-        populateCharacterSettings(settings);
-        state.currentCharacterSettingsSnapshot = collectCharacterSettings();
-
-    } catch (e) {
-        console.error('Failed to load character settings:', e);
+    if (options.useDefaults) {
         state.currentCharacterSettings = {};
+        resetCharacterSettingsToDefaults();
         state.currentCharacterSettingsSnapshot = collectCharacterSettings();
+    } else {
+        // Load settings
+        try {
+            console.log('Loading settings for:', charName, charId);
+            const settings = await invoke('load_character_settings', {
+                charactername: charName,
+                characterid: charId
+            }) || {};
+
+            console.log('Loaded settings:', settings);
+            state.currentCharacterSettings = settings;
+            populateCharacterSettings(settings);
+            state.currentCharacterSettingsSnapshot = collectCharacterSettings();
+
+        } catch (e) {
+            console.error('Failed to load character settings:', e);
+            state.currentCharacterSettings = {};
+            state.currentCharacterSettingsSnapshot = collectCharacterSettings();
+        }
     }
 
     document.getElementById('character-settings-modal').classList.add('active');
@@ -1358,6 +1367,28 @@ function setApplyAllMode(enabled) {
     if (idEl) {
         idEl.style.display = enabled ? 'none' : '';
     }
+}
+
+function resetCharacterSettingsToDefaults() {
+    const container = document.getElementById('settings-content');
+    if (!container) return;
+
+    container.querySelectorAll('input[type="checkbox"]').forEach(el => {
+        el.checked = el.defaultChecked;
+    });
+
+    container.querySelectorAll('input[type="number"], input[type="time"], input[type="text"]').forEach(el => {
+        el.value = el.defaultValue || '';
+    });
+
+    container.querySelectorAll('input[type="radio"]').forEach(el => {
+        el.checked = el.defaultChecked;
+    });
+
+    expeditionPriorityList = [...DEFAULT_EXPEDITION_PRIORITY_LIST];
+    dicePriorityList = [...DEFAULT_DICE_PRIORITY_LIST];
+    renderPriorityList('expedition-priority-list', expeditionPriorityList);
+    renderPriorityList('dice-priority-list', dicePriorityList);
 }
 
 function setSettingsOverlayVisible(visible) {
@@ -1397,7 +1428,7 @@ async function openAllCharacterSettings() {
     }
 
     const baseCharacter = state.characters[0];
-    await openCharacterSettings(baseCharacter.id, baseCharacter.name);
+    await openCharacterSettings(baseCharacter.id, baseCharacter.name, { useDefaults: true });
     setApplyAllMode(true);
 }
 
