@@ -286,7 +286,7 @@ pub async fn play_expeditions_exp(session: &mut SimpleSession, char_name: &str, 
                                     &gs.character.name,
                                     gs.character.player_id,
                                     &format!(
-                                        "EXPEDITION_EXP: Started {:?} (thirst {}s)",
+                                        "EXPEDITION_EXP: Started Expedition: {:?} (thirst left {}s)",
                                         best_expedition.target,
                                         best_expedition.thirst_for_adventure_sec
                                     ),

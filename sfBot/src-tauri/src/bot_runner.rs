@@ -825,6 +825,38 @@ async fn login_and_run_account(account: AccountInfo, mut stop_rx: broadcast::Rec
     Ok(())
 }
 
+async fn blacklist_character_for_invalid_session(
+    blacklist: &Arc<RwLock<HashMap<String, BlacklistEntry>>>,
+    char_key: &str,
+    character: &CharacterInfo,
+)
+{
+    let bl_seconds = match crate::utils::get_global_settings().await
+    {
+        Ok(settings) => settings
+            .get("doNotRelogCharacterSeconds")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(3),
+        Err(_) => 3,
+    };
+
+    let expiry = Local::now() + chrono::Duration::seconds(bl_seconds as i64);
+    {
+        let mut bl = blacklist.write().await;
+        bl.insert(char_key.to_string(), BlacklistEntry { expiry });
+    }
+
+    write_character_log(
+        &character.name,
+        character.id,
+        &format!(
+            "BLACKLISTED for invalid session until {} ({}s)",
+            expiry.format("%H:%M:%S"),
+            bl_seconds
+        ),
+    );
+}
+
 /// Main loop for a single account (replaces JS startSfAccount)
 /// Returns true if should stop completely, false if should re-login
 async fn run_account_loop(
@@ -974,6 +1006,7 @@ async fn run_account_loop(
                     Err(SFError::ServerError(msg)) if msg == "sessionid invalid" =>
                     {
                         println!("[{}] Session invalid for {}, marking for re-login", account.accname, character.name);
+                        blacklist_character_for_invalid_session(&blacklist, &char_key, character).await;
                         // Only count invalid sessions for active characters (based on character identity + settings)
                         let server = session_state.session.server_url().host_str().unwrap_or("unknown").to_string();
                         println!("charactername {}",&character.name);
@@ -1051,6 +1084,7 @@ async fn run_account_loop(
                     Err(SFError::InvalidRequest(msg)) if msg.contains("session") =>
                     {
                         println!("[{}] Session invalid for {}, marking for re-login", account.accname, character.name);
+                        blacklist_character_for_invalid_session(&blacklist, &char_key, character).await;
                         invalid_count += 1;
                         if invalid_count >= characters.len()
                         {
@@ -1180,28 +1214,7 @@ async fn run_account_loop(
 
                         if error_msg.contains("Invalid Session") || error_msg.contains("sessionid invalid")
                         {
-                            let bl_seconds = match crate::utils::get_global_settings().await {
-                                Ok(settings) => settings
-                                    .get("doNotRelogCharacterSeconds")
-                                    .and_then(|v| v.as_u64())
-                                    .unwrap_or(3),
-                                Err(_) => 3,
-                            };
-
-                            let expiry = Local::now() + chrono::Duration::seconds(bl_seconds as i64);
-                            {
-                                let mut bl = blacklist.write().await;
-                                bl.insert(char_key.clone(), BlacklistEntry { expiry });
-                            }
-                            write_character_log(
-                                &character.name,
-                                character.id,
-                                &format!(
-                                    "BLACKLISTED for invalid session until {} ({}s)",
-                                    expiry.format("%H:%M:%S"),
-                                    bl_seconds
-                                ),
-                            );
+                            blacklist_character_for_invalid_session(&blacklist, &char_key, character).await;
 
                             invalid_count += 1;
                             if invalid_count >= characters.len()

@@ -1082,9 +1082,7 @@ pub async fn cmd_play_expeditions_gold(session: &mut SimpleSession) -> Result<St
 
     if (enable_expeditions && is_in_range && play_gold_expeditions == "tavernPlayExpExpeditionGold")
     {
-        crate::bot_runner::write_character_log(name, char_id, "EXPEDITION_GOLD: Starting play_expeditions_gold");
         play_expeditions_gold(session, &*name, skip_using_hourglasses, beers_to_drink as u8, priorities_list).await?;
-        crate::bot_runner::write_character_log(name, char_id, "EXPEDITION_GOLD: Finished play_expeditions_gold");
     } else {
         crate::bot_runner::write_character_log(name, char_id, &format!(
             "EXPEDITION_GOLD: SKIPPED - enabled:{} && in_range:{} && play_gold:'{}'==tavernPlayExpExpeditionGold:{}",
