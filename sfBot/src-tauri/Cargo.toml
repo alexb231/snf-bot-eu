@@ -70,6 +70,7 @@ mime_guess = "2"
 winapi = { version = "0.3", features = ["processthreadsapi", "winuser"] }
 tray-icon = "0.14"
 open = "5"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [profile.dev]
 panic = "abort"

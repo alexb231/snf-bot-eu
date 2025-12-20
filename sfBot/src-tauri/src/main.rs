@@ -238,24 +238,7 @@ async fn main() {
 #[cfg(windows)]
 fn start_tray_icon() {
     thread::spawn(|| {
-        // Build a simple red circle icon in-memory (16x16)
-        let icon = {
-            let size = 16u32;
-            let mut rgba = Vec::with_capacity((size * size * 4) as usize);
-            for y in 0..size {
-                for x in 0..size {
-                    let dx = x as f32 - (size as f32 / 2.0) + 0.5;
-                    let dy = y as f32 - (size as f32 / 2.0) + 0.5;
-                    let dist = (dx * dx + dy * dy).sqrt();
-                    if dist <= (size as f32 / 2.0) - 1.0 {
-                        rgba.extend_from_slice(&[0xf5, 0x73, 0x7a, 0xff]); // reddish circle
-                    } else {
-                        rgba.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
-                    }
-                }
-            }
-            Icon::from_rgba(rgba, size, size).expect("Failed to build tray icon")
-        };
+        let icon = load_tray_icon();
 
         let mut menu = Menu::new();
         let open_item = MenuItem::new("Open UI", true, None);
@@ -301,6 +284,15 @@ fn start_tray_icon() {
             }
         }
     });
+}
+
+#[cfg(windows)]
+fn load_tray_icon() -> Icon {
+    let bytes = include_bytes!("../icons/tray.png");
+    let image = image::load_from_memory(bytes).expect("Failed to load tray icon bytes");
+    let image = image.to_rgba8();
+    let (width, height) = image.dimensions();
+    Icon::from_rgba(image.into_raw(), width, height).expect("Failed to build tray icon")
 }
 
 #[cfg(windows)]
