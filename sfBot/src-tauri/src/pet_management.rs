@@ -172,6 +172,7 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
         feeds_today: u16,
     }
     let mut feed_summaries: HashMap<u32, FeedSummary> = HashMap::new();
+    let mut pet_state_cache: HashMap<u32, (u16, u16)> = HashMap::new();
 
     let mut available_pets = get_pets_with_minimum_level_and_id(&gs, 1, habitat_type);
     available_pets.sort_by(|a, b| b.0.cmp(&a.0)); // ort pets by descending level
@@ -212,8 +213,10 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
     // feed partially fed pet
     if let Some((index, pet)) = partially_fed_pet
     {
-        let mut pet_level = pet.level;
-        let mut pet_fruits_today = pet.fruits_today;
+        let (mut pet_level, mut pet_fruits_today) = pet_state_cache
+            .get(&pet.id)
+            .copied()
+            .unwrap_or((pet.level, pet.fruits_today));
         while pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
         {
             if pet_level >= pet_max_level
@@ -243,6 +246,7 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
                 entry.feeds += 1;
                 entry.level = pet_level;
                 entry.feeds_today = pet_fruits_today;
+                pet_state_cache.insert(pet.id, (pet_level, pet_fruits_today));
             }
             else
             {
@@ -257,13 +261,15 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
         if let Some(Some((pet_id, desired_level))) = desired_levels_vec.get(*index)
         {
             let desired_level = (*desired_level).min(pet_max_level);
-            if pet.level >= desired_level || pet.fruits_today >= pet_max_feed_amount as u16
+            let (mut pet_level, mut pet_fruits_today) = pet_state_cache
+                .get(&pet.id)
+                .copied()
+                .unwrap_or((pet.level, pet.fruits_today));
+            if pet_level >= desired_level || pet_fruits_today >= pet_max_feed_amount as u16
             {
                 continue;
             }
 
-            let mut pet_level = pet.level;
-            let mut pet_fruits_today = pet.fruits_today;
             while pet_level < desired_level && pet_fruits_today < pet_max_feed_amount as u16 && feed_counter < max_feeds_per_day && fruits_available > 0
             {
                 if !try_feed_pet(session, pet.id, total_fruits as u32).await?
@@ -288,6 +294,7 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
                     entry.feeds += 1;
                     entry.level = pet_level;
                     entry.feeds_today = pet_fruits_today;
+                    pet_state_cache.insert(pet.id, (pet_level, pet_fruits_today));
                 }
                 else
                 {
@@ -332,19 +339,37 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
         }
     });
 
-    // no other pet should be fed until all desired pet levels are reached
+    let highest_desired_at_max = match desired_levels_vec
+        .iter()
+        .filter_map(|desired_pet| desired_pet.as_ref())
+        .max_by_key(|(_, desired_level)| *desired_level)
+    {
+        Some((desired_pet_id, desired_level)) if *desired_level >= pet_max_level =>
+        {
+            available_pets
+                .iter()
+                .find(|(_, pet)| pet.id == *desired_pet_id)
+                .map(|(_, pet)| pet.level >= pet_max_level)
+                .unwrap_or(false)
+        }
+        _ => false,
+    };
 
-    if fed_all_desired && feed_counter < max_feeds_per_day
+    // no other pet should be fed until all desired pet levels are reached,
+    // unless the highest desired pet is already maxed out
+    if (fed_all_desired || highest_desired_at_max) && feed_counter < max_feeds_per_day
     {
         for (index, pet) in available_pets.iter()
         {
-            if pet.fruits_today >= pet_max_feed_amount as u16 || pet.level >= pet_max_level
+            let (mut pet_level, mut pet_fruits_today) = pet_state_cache
+                .get(&pet.id)
+                .copied()
+                .unwrap_or((pet.level, pet.fruits_today));
+            if pet_fruits_today >= pet_max_feed_amount as u16 || pet_level >= pet_max_level
             {
                 continue;
             }
 
-            let mut pet_level = pet.level;
-            let mut pet_fruits_today = pet.fruits_today;
             while pet_fruits_today < pet_max_feed_amount as u16
                 && pet_level < pet_max_level
                 && feed_counter < max_feeds_per_day
@@ -372,6 +397,7 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
                     entry.feeds += 1;
                     entry.level = pet_level;
                     entry.feeds_today = pet_fruits_today;
+                    pet_state_cache.insert(pet.id, (pet_level, pet_fruits_today));
                 }
                 else
                 {
