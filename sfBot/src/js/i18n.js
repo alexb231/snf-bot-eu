@@ -96,6 +96,12 @@ const translations = {
 
         // Character Settings Modal
         "charSettings.title": "Character Settings",
+        "charSettings.applyAllButton": "Apply settings to all",
+        "charSettings.applyAllNotice": "Applies to all characters",
+        "charSettings.savedAll": "Settings saved for all characters",
+        "charSettings.noCharacters": "No characters available",
+        "charSettings.noChanges": "No settings changes to apply",
+        "charSettings.savingAll": "Saving settings...",
 
         // Settings Sections
         "section.general": "General",
@@ -484,6 +490,12 @@ const translations = {
 
         // Character Settings Modal
         "charSettings.title": "Charakter Einstellungen",
+        "charSettings.applyAllButton": "Einstellungen auf alle anwenden",
+        "charSettings.applyAllNotice": "Gilt fuer alle Charaktere",
+        "charSettings.savedAll": "Einstellungen fuer alle Charaktere gespeichert",
+        "charSettings.noCharacters": "Keine Charaktere verfuegbar",
+        "charSettings.noChanges": "Keine geaenderten Einstellungen vorhanden",
+        "charSettings.savingAll": "Einstellungen werden gespeichert...",
 
         // Settings Sections
         "section.general": "Allgemein",

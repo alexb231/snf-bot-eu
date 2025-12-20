@@ -383,6 +383,29 @@ pub async fn get_character_log(Query(query): Query<CharacterLogQuery>) -> impl I
     }
 }
 
+#[derive(Deserialize)]
+pub struct SaveAllCharacterSettingsRequest {
+    pub settings: HashMap<String, Value>,
+}
+
+/// POST /api/characters/settings-all - Save settings for all characters
+pub async fn save_all_character_settings(
+    Json(request): Json<SaveAllCharacterSettingsRequest>,
+) -> impl IntoResponse {
+    match crate::utils::save_settings_for_all_characters(request.settings).await {
+        Ok(json_str) => {
+            match serde_json::from_str::<Value>(&json_str) {
+                Ok(json_value) => (StatusCode::OK, Json(json_value)),
+                Err(_) => (StatusCode::OK, Json(serde_json::json!({"message": json_str}))),
+            }
+        },
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e})),
+        ),
+    }
+}
+
 // ============================================================================
 // Expedition Stats Endpoints
 // ============================================================================

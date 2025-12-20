@@ -1,7 +1,7 @@
 #![allow(warnings)]
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     error::Error,
     fmt,
     fmt::Debug,
@@ -44,7 +44,7 @@ use crate::{
     arena::arena_fight,
     arena_manager::play_idle_game,
     cache_character_settings,
-    character_cache::{load_character_cache, save_character_cache, should_update_cache, update_character_active_status, CachedCharacter},
+    character_cache::{load_all_cached_characters, load_character_cache, save_character_cache, should_update_cache, update_character_active_status, CachedCharacter},
     paths::{get_character_settings_path, get_global_settings_path, get_user_config_path},
     city_guard::city_guard,
     clear_all_session_state,
@@ -219,6 +219,66 @@ pub async fn save_character_settings(charactername: &str, characterid: u32, sett
         "success": true,
         "message": format!("Settings saved successfully for {}, id {}.", charactername, characterid),
         "settings": settings
+    });
+    Ok(response.to_string())
+}
+
+pub async fn save_settings_for_all_characters(settings: HashMap<String, Value>) -> Result<String, String>
+{
+    if settings.is_empty() {
+        let response = serde_json::json!({
+            "success": true,
+            "message": "No settings changes to apply.",
+            "settings": settings,
+            "count": 0
+        });
+        return Ok(response.to_string());
+    }
+
+    let mut targets: Vec<(String, u32)> = Vec::new();
+    let mut seen: HashSet<(u32, String)> = HashSet::new();
+
+    if let Ok(cached_characters) = load_all_cached_characters() {
+        for character in cached_characters {
+            let key = (character.id, character.name.to_lowercase());
+            if seen.insert(key) {
+                targets.push((character.name, character.id));
+            }
+        }
+    }
+
+    if let Ok(existing_settings) = load_all_character_settings() {
+        for character in existing_settings {
+            let key = (character.character_id, character.character_name.to_lowercase());
+            if seen.insert(key) {
+                targets.push((character.character_name, character.character_id));
+            }
+        }
+    }
+
+    if targets.is_empty() {
+        return Err("No characters found to update settings".to_string());
+    }
+
+    let mut updated = 0usize;
+    for (name, id) in targets {
+        let mut merged = match load_character_settings(&name, id) {
+            Ok(Some(existing)) => existing,
+            Ok(None) => HashMap::new(),
+            Err(_) => HashMap::new(),
+        };
+        for (key, value) in &settings {
+            merged.insert(key.clone(), value.clone());
+        }
+        save_character_settings(&name, id, merged).await?;
+        updated += 1;
+    }
+
+    let response = serde_json::json!({
+        "success": true,
+        "message": format!("Settings saved for {} character(s).", updated),
+        "settings": settings,
+        "count": updated
     });
     Ok(response.to_string())
 }

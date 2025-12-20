@@ -163,6 +163,18 @@ async function apiSaveCharacterSettings(name, id, settings) {
 }
 
 /**
+ * Save settings for all characters
+ * @param {object} settings - Settings object
+ * @returns {Promise<object>}
+ */
+async function apiSaveAllCharacterSettings(settings) {
+    return apiRequest('/characters/settings-all', {
+        method: 'POST',
+        body: JSON.stringify({ settings }),
+    });
+}
+
+/**
  * Get all character settings
  * @returns {Promise<object>}
  */
@@ -327,6 +339,8 @@ async function invoke(cmd, args = {}) {
             return getCharacterSettings(args.charactername, args.characterid).then(r => r.settings);
         case 'save_character_settings':
             return apiSaveCharacterSettings(args.charactername, args.characterid, args.settings);
+        case 'save_all_character_settings':
+            return apiSaveAllCharacterSettings(args.settings);
         case 'load_all_character_settings':
             return getAllCharacterSettings().then(r => r.settings);
         case 'get_character_log':

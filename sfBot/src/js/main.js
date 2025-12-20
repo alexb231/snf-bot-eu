@@ -17,6 +17,8 @@ const state = {
     refreshInterval: null,
     currentCharacter: null,
     currentCharacterSettings: null,
+    currentCharacterSettingsSnapshot: null,
+    applySettingsToAll: false,
     accountFilter: '' // Empty string = show all, otherwise filter by account name
 };
 
@@ -146,6 +148,8 @@ function setupBotControls() {
     document.getElementById('btn-shutdown').addEventListener('click', shutdownServer);
     const summaryBtn = document.getElementById('btn-expedition-summary');
     if (summaryBtn) summaryBtn.addEventListener('click', openExpeditionSummary);
+    const settingsAllBtn = document.getElementById('btn-settings-all');
+    if (settingsAllBtn) settingsAllBtn.addEventListener('click', openAllCharacterSettings);
 }
 
 async function shutdownServer() {
@@ -1214,10 +1218,12 @@ function setupModals() {
     // Character settings modal
     document.getElementById('close-char-settings').addEventListener('click', () => {
         document.getElementById('character-settings-modal').classList.remove('active');
+        setApplyAllMode(false);
     });
 
     document.getElementById('cancel-char-settings').addEventListener('click', () => {
         document.getElementById('character-settings-modal').classList.remove('active');
+        setApplyAllMode(false);
     });
 
     // Use onclick instead of addEventListener to ensure only one handler
@@ -1301,6 +1307,7 @@ function setupSettingsNavigation() {
 }
 
 async function openCharacterSettings(charId, charName) {
+    setApplyAllMode(false);
     state.currentCharacter = { id: charId, name: charName };
 
     document.getElementById('settings-char-name').textContent = charName;
@@ -1326,13 +1333,72 @@ async function openCharacterSettings(charId, charName) {
         console.log('Loaded settings:', settings);
         state.currentCharacterSettings = settings;
         populateCharacterSettings(settings);
+        state.currentCharacterSettingsSnapshot = collectCharacterSettings();
 
     } catch (e) {
         console.error('Failed to load character settings:', e);
         state.currentCharacterSettings = {};
+        state.currentCharacterSettingsSnapshot = collectCharacterSettings();
     }
 
     document.getElementById('character-settings-modal').classList.add('active');
+}
+
+function setApplyAllMode(enabled) {
+    state.applySettingsToAll = enabled;
+    const badge = document.getElementById('settings-apply-all');
+    const nameEl = document.getElementById('settings-char-name');
+    const idEl = document.getElementById('settings-char-id');
+    if (badge) {
+        badge.style.display = enabled ? 'inline' : 'none';
+    }
+    if (nameEl) {
+        nameEl.style.display = enabled ? 'none' : '';
+    }
+    if (idEl) {
+        idEl.style.display = enabled ? 'none' : '';
+    }
+}
+
+function setSettingsOverlayVisible(visible) {
+    const overlay = document.getElementById('character-settings-overlay');
+    if (overlay) {
+        overlay.classList.toggle('hidden', !visible);
+    }
+}
+
+function valuesEqual(a, b) {
+    if (a === b) return true;
+    if (a === null || b === null || a === undefined || b === undefined) return false;
+    if (Array.isArray(a) || Array.isArray(b)) {
+        return JSON.stringify(a) === JSON.stringify(b);
+    }
+    if (typeof a === 'object' || typeof b === 'object') {
+        return JSON.stringify(a) === JSON.stringify(b);
+    }
+    return false;
+}
+
+function collectChangedSettings(current, baseline) {
+    const changed = {};
+    Object.keys(current).forEach(key => {
+        const baseVal = baseline ? baseline[key] : undefined;
+        if (!valuesEqual(current[key], baseVal)) {
+            changed[key] = current[key];
+        }
+    });
+    return changed;
+}
+
+async function openAllCharacterSettings() {
+    if (!state.characters || state.characters.length === 0) {
+        showLog(t('charSettings.noCharacters'), 'error');
+        return;
+    }
+
+    const baseCharacter = state.characters[0];
+    await openCharacterSettings(baseCharacter.id, baseCharacter.name);
+    setApplyAllMode(true);
 }
 
 function populateCopySettingsOptions(currentId, currentName) {
@@ -1546,39 +1612,70 @@ async function saveCharacterSettings() {
 
     try {
         const settings = collectCharacterSettings();
-
-        // Save and get the response which includes the saved settings
-        const saveResult = await invoke('save_character_settings', {
-            charactername: state.currentCharacter.name,
-            characterid: state.currentCharacter.id,
-            settings: settings
-        });
+        let saveResult;
+        let applyAllSettings = null;
+        if (state.applySettingsToAll) {
+            const baseline = state.currentCharacterSettingsSnapshot || {};
+            const changedSettings = collectChangedSettings(settings, baseline);
+            if (Object.keys(changedSettings).length === 0) {
+                showLog(t('charSettings.noChanges'), 'info');
+                document.getElementById('character-settings-modal').classList.remove('active');
+                setApplyAllMode(false);
+                return;
+            }
+            applyAllSettings = changedSettings;
+            setSettingsOverlayVisible(true);
+            saveResult = await invoke('save_all_character_settings', { settings: changedSettings });
+        } else {
+            // Save and get the response which includes the saved settings
+            saveResult = await invoke('save_character_settings', {
+                charactername: state.currentCharacter.name,
+                characterid: state.currentCharacter.id,
+                settings: settings
+            });
+        }
 
         // Verify using the response from save (no separate load needed)
-        const savedSettings = saveResult?.settings || {};
-
-        // Check a few key values against what was returned
-        if (settings.settingCharacterActive !== savedSettings.settingCharacterActive) {
-            console.error('MISMATCH: settingCharacterActive - sent:', settings.settingCharacterActive, 'received:', savedSettings.settingCharacterActive);
+        if (!state.applySettingsToAll) {
+            const savedSettings = saveResult?.settings || {};
+            // Check a few key values against what was returned
+            if (settings.settingCharacterActive !== savedSettings.settingCharacterActive) {
+                console.error('MISMATCH: settingCharacterActive - sent:', settings.settingCharacterActive, 'received:', savedSettings.settingCharacterActive);
+            }
         }
 
-        // Update isActive in state.characters to sync table display
-        const charIndex = state.characters.findIndex(c =>
-            c.name === state.currentCharacter.name && c.id === state.currentCharacter.id
-        );
-        if (charIndex !== -1) {
-            state.characters[charIndex].isActive = settings.settingCharacterActive;
-            renderCharactersTable();
-        }
+        if (state.applySettingsToAll) {
+            const appliedSettings = applyAllSettings || {};
+            if (appliedSettings.settingCharacterActive !== undefined) {
+                state.characters = state.characters.map(c => ({
+                    ...c,
+                    isActive: appliedSettings.settingCharacterActive
+                }));
+                renderCharactersTable();
+            }
+            document.getElementById('character-settings-modal').classList.remove('active');
+            showLog(t('charSettings.savedAll'), 'success');
+        } else {
+            // Update isActive in state.characters to sync table display
+            const charIndex = state.characters.findIndex(c =>
+                c.name === state.currentCharacter.name && c.id === state.currentCharacter.id
+            );
+            if (charIndex !== -1) {
+                state.characters[charIndex].isActive = settings.settingCharacterActive;
+                renderCharactersTable();
+            }
 
-        document.getElementById('character-settings-modal').classList.remove('active');
-        showLog(t('log.charSettingsSaved').replace('{name}', state.currentCharacter.name), 'success');
+            document.getElementById('character-settings-modal').classList.remove('active');
+            showLog(t('log.charSettingsSaved').replace('{name}', state.currentCharacter.name), 'success');
+        }
+        setApplyAllMode(false);
 
     } catch (e) {
         console.error('Failed to save character settings:', e);
         showLog(t('log.saveError') + ': ' + e.message, 'error');
     } finally {
         isSavingCharacterSettings = false;
+        setSettingsOverlayVisible(false);
         // Re-enable save button
         if (saveBtn) saveBtn.disabled = false;
     }
