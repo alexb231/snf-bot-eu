@@ -93,6 +93,19 @@ pub async fn play_expeditions_gold(session: &mut SimpleSession, char_name: &str,
         if should_buy_beer(character_equip, beers_to_drink, beer_drunk, beer_max, thirst_for_adventure_sec, mushrooms, mushrooms_to_keep as u32)
         {
             session.send_command(Command::BuyBeer).await?;
+            let updated_gs = session.send_command(Command::Update).await?;
+            let new_beer_count = updated_gs.tavern.beer_drunk;
+            let new_beer_max = updated_gs.tavern.beer_max;
+            let new_mushrooms = updated_gs.character.mushrooms;
+            let new_thirst = updated_gs.tavern.thirst_for_adventure_sec;
+            write_character_log(
+                &gs.character.name,
+                gs.character.player_id,
+                &format!(
+                    "TAVERN: Bought beer ({}/{}), mushrooms: {}, thirst: {}",
+                    new_beer_count, new_beer_max, new_mushrooms, new_thirst
+                ),
+            );
         }
 
         let gs = session.send_command(Command::Update).await?;

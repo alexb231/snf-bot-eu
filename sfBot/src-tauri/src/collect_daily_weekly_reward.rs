@@ -52,11 +52,13 @@ pub async fn collect_daily_and_weekly_rewards(session: &mut SimpleSession) -> Re
 use chrono::{Local, NaiveTime};
 use sf_api::gamestate::rewards::CalendarRewardType;
 
-use crate::fetch_character_setting;
+use crate::{bot_runner::write_character_log, fetch_character_setting};
 
 async fn collect_daily_calendar_exp_only(session: &mut SimpleSession, consider_mushroom_calendar: bool) -> Result<String, Box<dyn std::error::Error>>
 {
-    let gs = session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let calendar_rewards = &gs.specials.calendar.rewards;
     let calendar_next = &gs.specials.calendar.next_possible;
 
@@ -101,10 +103,21 @@ async fn collect_daily_calendar_exp_only(session: &mut SimpleSession, consider_m
             if *unlock_time <= Local::now()
             {
                 let collect_command = Command::CollectCalendar;
-                if let Err(err) = session.send_command(collect_command).await
+                match session.send_command(collect_command).await
                 {
-                    eprintln!("Error: func collect_daily_calendar while executing CollectCalendar command: {}", err);
-                    return Ok(String::from("Collected daily calendar."));
+                    Ok(_) =>
+                    {
+                        write_character_log(
+                            &character_name,
+                            character_id,
+                            "CALENDAR: Collected daily calendar (exp-only)",
+                        );
+                    }
+                    Err(err) =>
+                    {
+                        eprintln!("Error: func collect_daily_calendar while executing CollectCalendar command: {}", err);
+                        return Ok(String::from("Collected daily calendar."));
+                    }
                 }
             }
         }
@@ -114,7 +127,9 @@ async fn collect_daily_calendar_exp_only(session: &mut SimpleSession, consider_m
 
 async fn collect_daily_calendar(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
-    let gs = session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let calendar = &gs.specials.calendar.next_possible;
 
     if (gs.character.inventory.count_free_slots() <= 0)
@@ -127,10 +142,21 @@ async fn collect_daily_calendar(session: &mut SimpleSession) -> Result<String, B
         if *unlock_time <= Local::now()
         {
             let collect_command = Command::CollectCalendar;
-            if let Err(err) = session.send_command(collect_command).await
+            match session.send_command(collect_command).await
             {
-                eprintln!("Error: func collect_daily_calendar while executing CollectCalendar command: {}", err);
-                return Ok(String::from("Collected daily calendar."));
+                Ok(_) =>
+                {
+                    write_character_log(
+                        &character_name,
+                        character_id,
+                        "CALENDAR: Collected daily calendar",
+                    );
+                }
+                Err(err) =>
+                {
+                    eprintln!("Error: func collect_daily_calendar while executing CollectCalendar command: {}", err);
+                    return Ok(String::from("Collected daily calendar."));
+                }
             }
         }
     }
@@ -139,7 +165,9 @@ async fn collect_daily_calendar(session: &mut SimpleSession) -> Result<String, B
 
 async fn collect_daily_rewards(session: &mut SimpleSession) -> Result<String, Box<dyn Error>>
 {
-    let gs = session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let daily_tasks = &gs.specials.tasks.daily;
     let total_points = daily_tasks.earned_points();
     let position_to_claim = match total_points
@@ -156,6 +184,11 @@ async fn collect_daily_rewards(session: &mut SimpleSession) -> Result<String, Bo
         {
             let command = Command::CollectDailyQuestReward { pos };
             session.send_command(command).await?;
+            write_character_log(
+                &character_name,
+                character_id,
+                &format!("TASKS: Collected daily chest {}", pos + 1),
+            );
             return Ok(format!("Collecting daily rewards at position {}", pos + 1));
         }
     }
@@ -164,7 +197,9 @@ async fn collect_daily_rewards(session: &mut SimpleSession) -> Result<String, Bo
 
 async fn collect_weekly_rewards(session: &mut SimpleSession) -> Result<String, Box<dyn Error>>
 {
-    let gs = &session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let weekly_tasks = &gs.specials.tasks.event;
 
     let total_points = weekly_tasks.earned_points();
@@ -183,6 +218,11 @@ async fn collect_weekly_rewards(session: &mut SimpleSession) -> Result<String, B
         {
             let command = Command::CollectEventTaskReward { pos };
             session.send_command(command).await?;
+            write_character_log(
+                &character_name,
+                character_id,
+                &format!("TASKS: Collected event chest {}", pos + 1),
+            );
             return Ok(format!("Collecting weekly rewards at position {}", pos + 1));
         }
     }
@@ -191,16 +231,29 @@ async fn collect_weekly_rewards(session: &mut SimpleSession) -> Result<String, B
 
 async fn collect_advents_calendar(session: &mut SimpleSession) -> Result<(), Box<dyn Error>>
 {
-    let gs = session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let advents_calender_command = Command::Custom {
         cmd_name: "AdventsCalendarClaimReward".to_string(),
         arguments: vec![],
     };
 
-    if let Err(err) = session.send_command(advents_calender_command).await
+    match session.send_command(advents_calender_command).await
     {
-        eprintln!("Error: func collect_advents_calendar while executing advents_calender_command command: {}", err);
-        return Ok(());
+        Ok(_) =>
+        {
+            write_character_log(
+                &character_name,
+                character_id,
+                "CALENDAR: Collected advent calendar",
+            );
+        }
+        Err(err) =>
+        {
+            eprintln!("Error: func collect_advents_calendar while executing advents_calender_command command: {}", err);
+            return Ok(());
+        }
     }
     Ok(())
 }

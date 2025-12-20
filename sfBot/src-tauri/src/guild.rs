@@ -1,6 +1,6 @@
 #![allow(warnings)]
 
-use std::{collections::HashMap, error::Error, fmt::Debug};
+use std::{collections::HashMap, error::Error};
 
 use chrono::{Duration, Local, NaiveTime};
 use sf_api::{
@@ -14,7 +14,7 @@ use sf_api::{
     SimpleSession,
 };
 
-use crate::fetch_character_setting;
+use crate::{bot_runner::write_character_log, fetch_character_setting};
 
 pub async fn sign_up_for_guild_attack_and_defense(session: &mut SimpleSession) -> Result<String, Box<dyn Error>>
 {
@@ -44,7 +44,14 @@ pub async fn sign_up_for_guild_attack_and_defense(session: &mut SimpleSession) -
                 let already_participating = check_participation(&guild, char_name, BattlesJoined::Defense);
                 if !already_participating
                 {
-                    let _ = session.send_command(Command::GuildJoinDefense).await;
+                    if session.send_command(Command::GuildJoinDefense).await.is_ok()
+                    {
+                        write_character_log(
+                            &gs.character.name,
+                            gs.character.player_id,
+                            "GUILD: Signed up for defense",
+                        );
+                    }
                     result += "\nSigned up for guild def";
                 }
             }
@@ -58,7 +65,14 @@ pub async fn sign_up_for_guild_attack_and_defense(session: &mut SimpleSession) -
                 let already_participating = check_participation(&guild, char_name, BattlesJoined::Defense);
                 if (!already_participating)
                 {
-                    let _ = session.send_command(Command::GuildJoinDefense).await;
+                    if session.send_command(Command::GuildJoinDefense).await.is_ok()
+                    {
+                        write_character_log(
+                            &gs.character.name,
+                            gs.character.player_id,
+                            "GUILD: Signed up for defense",
+                        );
+                    }
                     result += "\nSigned up for guild def";
                 }
             }
@@ -71,7 +85,14 @@ pub async fn sign_up_for_guild_attack_and_defense(session: &mut SimpleSession) -
                 let already_participating = check_participation(&guild, char_name, BattlesJoined::Attack);
                 if !already_participating
                 {
-                    let _ = session.send_command(Command::GuildJoinAttack).await;
+                    if session.send_command(Command::GuildJoinAttack).await.is_ok()
+                    {
+                        write_character_log(
+                            &gs.character.name,
+                            gs.character.player_id,
+                            "GUILD: Signed up for attack",
+                        );
+                    }
                     result += "\nSigned up for guild attack";
                 }
             }

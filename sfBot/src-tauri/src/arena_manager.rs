@@ -55,7 +55,6 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
 
     if current_runes >= ingame_max_rune_limit
     {
-        // return Ok(String::from("Arena manager is finished skipping."));
         return Ok("".to_string());
     }
 
@@ -278,10 +277,6 @@ pub async fn play_idle_game_impl(session: &mut SimpleSession) -> Result<HashMap<
     {
         if (buildings[building].upgrade_cost < idle_game.current_money)
         {
-            // let upgradex_max = Command::Custom {
-            //     cmd_name: "IdleIncrease".to_string(),
-            //     arguments: Vec::from([get_building_id(building).to_string(),
-            // "-1".to_string()]), //-1 is max };
             let upgradex_once = Command::IdleUpgrade { typ: building, amount: -1 };
 
             if let Err(err) = session.send_command(upgradex_once).await
