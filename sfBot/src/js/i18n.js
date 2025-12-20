@@ -24,7 +24,6 @@ const translations = {
         "stats.accounts": "Accounts",
         "stats.characters": "Characters",
         "stats.active": "Active",
-        "stats.uptime": "Uptime",
 
         // Dashboard
         "dashboard.currentAction": "Current Action",
@@ -434,7 +433,6 @@ const translations = {
         "stats.accounts": "Accounts",
         "stats.characters": "Charaktere",
         "stats.active": "Aktiv",
-        "stats.uptime": "Laufzeit",
 
         // Dashboard
         "dashboard.currentAction": "Aktuelle Aktion",

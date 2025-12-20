@@ -463,7 +463,6 @@ html, body {
 .accounts-icon { background: linear-gradient(135deg, #6366f1, #818cf8); }
 .chars-icon { background: linear-gradient(135deg, #22c55e, #4ade80); }
 .active-icon { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
-.time-icon { background: linear-gradient(135deg, #ec4899, #f472b6); }
 
 .stat-info {
     display: flex;

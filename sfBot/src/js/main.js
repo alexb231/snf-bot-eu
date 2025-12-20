@@ -12,8 +12,6 @@ const state = {
     accounts: [],
     characters: [],
     pendingActiveOverrides: {}, // key: `${id}_${name}` -> bool
-    startTime: null,
-    uptimeInterval: null,
     refreshInterval: null,
     currentCharacter: null,
     currentCharacterSettings: null,
@@ -193,10 +191,8 @@ async function startBot() {
 
         state.running = true;
         state.paused = false;
-        state.startTime = Date.now();
 
         updateBotUI();
-        startUptimeTimer();
         showLog('Bot gestartet', 'success');
 
     } catch (e) {
@@ -213,10 +209,8 @@ async function stopBot() {
 
         state.running = false;
         state.paused = false;
-        state.startTime = null;
 
         updateBotUI();
-        stopUptimeTimer();
         showLog('Bot gestoppt', 'success');
 
     } catch (e) {
@@ -276,35 +270,6 @@ function updateBotUI() {
     } else if (state.paused) {
         actionEl.textContent = t('dashboard.botPaused');
     }
-}
-
-// ============================================================================
-// Uptime Timer
-// ============================================================================
-
-function startUptimeTimer() {
-    stopUptimeTimer();
-    state.uptimeInterval = setInterval(updateUptime, 1000);
-}
-
-function stopUptimeTimer() {
-    if (state.uptimeInterval) {
-        clearInterval(state.uptimeInterval);
-        state.uptimeInterval = null;
-    }
-    document.getElementById('stat-uptime').textContent = '00:00:00';
-}
-
-function updateUptime() {
-    if (!state.startTime) return;
-
-    const elapsed = Date.now() - state.startTime;
-    const hours = Math.floor(elapsed / 3600000);
-    const minutes = Math.floor((elapsed % 3600000) / 60000);
-    const seconds = Math.floor((elapsed % 60000) / 1000);
-
-    document.getElementById('stat-uptime').textContent =
-        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 // ============================================================================
