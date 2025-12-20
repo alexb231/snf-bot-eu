@@ -15,7 +15,7 @@ use sf_api::{
     SimpleSession,
 };
 
-use crate::fetch_character_setting;
+use crate::{bot_runner::write_character_log, fetch_character_setting};
 // for EquipmentSlot::into_usize()
 
 const EXTRA_HP_RUNE_MAX: u32 = 15;
@@ -190,19 +190,10 @@ fn check_item_boost(
     let mut item_boost = 0.0;
     for same_type_item in same_type_items
     {
-        let item_to_check_value =
-            get_item_value(gs, same_type_item, Some(item_to_check));
-        let current_item_boost =
-            get_item_value(gs, Some(item_to_check), same_type_item);
-
-        if current_item_boost >= item_to_check_value
+        let boost = get_item_value(gs, same_type_item, Some(item_to_check));
+        if boost > item_boost
         {
-            continue;
-        }
-
-        if current_item_boost > item_boost
-        {
-            item_boost = current_item_boost;
+            item_boost = boost;
         }
     }
 
@@ -349,6 +340,11 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
     // Best candidate per equipment slot: bag position + boost
     let mut best_by_slot: HashMap<EquipmentSlot, (BagPosition, f64)> =
         HashMap::new();
+    let mut scanned = 0usize;
+    let mut equipable = 0usize;
+    let mut useful = 0usize;
+    let mut boosted = 0usize;
+    let mut min_passed = 0usize;
 
     for (pos, opt_item) in gs.character.inventory.iter()
     {
@@ -357,6 +353,7 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
         {
             continue;
         };
+        scanned += 1;
         let Some(slot) = item.typ.equipment_slot()
         else
         {
@@ -367,17 +364,27 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
         {
             continue;
         }
+        equipable += 1;
 
         let old_item = gs.character.equipment.0[slot].as_ref();
-        if !is_item_useful_for(&gs, item, old_item)
+        let slot_empty = old_item.is_none();
+        if !slot_empty && !is_item_useful_for(&gs, item, old_item)
         {
             continue;
         }
+        useful += 1;
 
         let boost = check_item_boost(&gs, item, true);
-        if boost <= 0.0 || boost < min_boost_percent
+        if boost > 0.0 {
+            boosted += 1;
+        }
+        if !slot_empty
         {
-            continue;
+            if boost <= 0.0 || boost < min_boost_percent
+            {
+                continue;
+            }
+            min_passed += 1;
         }
 
         let keep = match best_by_slot.get(&slot)
@@ -422,10 +429,26 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
 
     if changes.is_empty()
     {
+        write_character_log(
+            &gs.character.name,
+            gs.character.player_id,
+            &format!(
+                "EQUIP_SWAP: scanned={} equipable={} useful={} boosted={} min_passed={} min={}",
+                scanned, equipable, useful, boosted, min_passed, min_boost_percent
+            ),
+        );
         Ok("No better gear found to equip from main/extended inventory.".to_string())
     }
     else
     {
+        write_character_log(
+            &gs.character.name,
+            gs.character.player_id,
+            &format!(
+                "EQUIP_SWAP: scanned={} equipable={} useful={} boosted={} min_passed={} min={} swapped={}",
+                scanned, equipable, useful, boosted, min_passed, min_boost_percent, changes.len()
+            ),
+        );
         Ok(format!("Swapped equipment:\n{}", changes.join("\n")))
     }
 }

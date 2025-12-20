@@ -30,11 +30,20 @@ fn check_type<T: std::fmt::Debug>(x: T)
 pub async fn manage_inventory(session: &mut SimpleSession) -> Result<String, Box<dyn Error>>
 {
     let mut gs = session.send_command(Command::Update).await?.clone();
-    let mut free_slots = gs.character.inventory.count_free_slots();
 
     let amount_of_slots_to_keep_free: i32 = std::cmp::min(fetch_character_setting(&gs, "itemsInventorySlotsToBeLeft").unwrap_or(0), 1);
     let sell_items_to_witch: bool = fetch_character_setting(&gs, "itemsImmediatelyThrowIntoCauldron").unwrap_or(false);
     let exclude_epics_from_witch_selling: bool = fetch_character_setting(&gs, "itemsImmediatelyThrowIntoCauldronExceptEpics").unwrap_or(false); // excludes epics
+    let equip_before_selling: bool =
+        fetch_character_setting(&gs, "itemsEquipBeforeSelling").unwrap_or(false);
+
+    if equip_before_selling
+    {
+        check_and_swap_equipment(session).await?;
+        gs = session.send_command(Command::Update).await?.clone();
+    }
+
+    let mut free_slots = gs.character.inventory.count_free_slots();
     drink_potions(session).await?;
     sell_potions(session).await?;
     sell_gems(session).await?;
@@ -56,18 +65,6 @@ pub async fn manage_inventory(session: &mut SimpleSession) -> Result<String, Box
         return Ok(String::from(""));
     }
 
-    let equip_before_selling: bool =
-        fetch_character_setting(&gs, "itemsEquipBeforeSelling").unwrap_or(false);
-    if equip_before_selling
-    {
-        check_and_swap_equipment(session).await?;
-        gs = session.send_command(Command::Update).await?.clone();
-        free_slots = gs.character.inventory.count_free_slots();
-        if free_slots > amount_of_slots_to_keep_free as usize
-        {
-            return Ok(String::from(""));
-        }
-    }
     // only when inventory is full
     let result = sell_two_cheapest_items(session, exclude_epics_from_witch_selling).await?;
 

@@ -743,7 +743,7 @@ async function loadAndDisplayLog(charName, charId) {
         if (result.error) {
             logContent.textContent = result.error;
         } else {
-            logContent.textContent = result.log || 'Keine Logs vorhanden';
+            logContent.textContent = result.log || t('logs.empty');
         }
         // Scroll to bottom after content is rendered
         requestAnimationFrame(() => {

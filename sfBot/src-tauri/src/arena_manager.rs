@@ -237,7 +237,6 @@ pub async fn play_idle_game(session: &mut SimpleSession) -> Result<String, Box<d
             finalMessage = String::from("Arena manager -> \n{");
             message_started = true;
         }
-        finalMessage += "Arena manager is not unlocked yet\n";
     }
     if message_started
     {

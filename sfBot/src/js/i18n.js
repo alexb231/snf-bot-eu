@@ -81,6 +81,7 @@ const translations = {
         "logs.title": "Bot Logs",
         "logs.clear": "Clear Logs",
         "logs.ready": "Bot ready...",
+        "logs.empty": "No logs available",
 
         // Global Settings Modal
         "globalSettings.title": "Bot Settings",
@@ -468,6 +469,7 @@ const translations = {
         "logs.title": "Bot Logs",
         "logs.clear": "Logs loeschen",
         "logs.ready": "Bot bereit...",
+        "logs.empty": "Keine Logs vorhanden",
 
         // Global Settings Modal
         "globalSettings.title": "Bot Einstellungen",
