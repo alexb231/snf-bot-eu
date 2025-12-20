@@ -63,7 +63,7 @@ pub async fn feed_all_pets(session: &mut SimpleSession, feed_pets: bool, expensi
     }
     else
     {
-        vec![0, 0, 93, 0, 0, 0, 0, 0, 0, 0, 0, 0, 91, 0, 0, 0, 74, 0, 200]
+        vec![0, 0, 93, 0, 0, 0, 0, 0, 0, 0, 0, 0, 91, 0, 0, 0, 74, 0,0, 200]
     };
     let desired_levels_earth = if (expensive_route)
     {
