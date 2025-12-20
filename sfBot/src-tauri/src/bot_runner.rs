@@ -11,11 +11,12 @@ use std::{
     collections::HashMap,
     fs::{self, OpenOptions},
     io::Write,
-    sync::Arc,
-    time::Duration,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 use chrono::{DateTime, Local};
+use once_cell::sync::Lazy;
 use sf_api::{command::Command, error::SFError, gamestate::character::Mount, gamestate::tavern::CurrentAction, SimpleSession};
 use serde_json::Value;
 use tokio::{
@@ -56,6 +57,25 @@ pub struct CharacterInfo
 
 /// Maximum number of log lines to keep per character
 const MAX_LOG_LINES: usize = 10000;
+/// Trim log files every N writes (per file)
+const LOG_TRIM_EVERY: usize = 200;
+/// Flush buffered logs every N seconds
+const LOG_FLUSH_INTERVAL: Duration = Duration::from_secs(30);
+/// Flush buffered logs after N bytes
+const LOG_FLUSH_BYTES: usize = 64 * 1024;
+
+static LOG_WRITE_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static LOG_TRIM_COUNTERS: Lazy<Mutex<HashMap<String, usize>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static LOG_BUFFERS: Lazy<Mutex<HashMap<String, LogBuffer>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+struct LogBuffer
+{
+    pending: String,
+    pending_lines: usize,
+    last_flush: Instant,
+}
 
 /// Backoff for transient network errors
 const OFFLINE_BACKOFF_BASE_MS: u64 = 5_000;
@@ -66,7 +86,7 @@ const OFFLINE_BACKOFF_JITTER_MS: u64 = 1_000;
 fn log_dir() -> std::path::PathBuf { exe_relative_path("logs") }
 
 /// Write a log entry to the character-specific log file
-/// Keeps only the last MAX_LOG_LINES entries
+/// Keeps only the last MAX_LOG_LINES entries, trimming periodically
 pub fn write_character_log(character_name: &str, character_id: u32, message: &str)
 {
     let log_path = log_dir();
@@ -80,25 +100,92 @@ pub fn write_character_log(character_name: &str, character_id: u32, message: &st
 
     let filename = log_path.join(format!("{}_{}.log", character_name, character_id));
     let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
-    let log_line = format!("[{}] {}", timestamp, message);
+    let log_line = format!("[{}] {}\n", timestamp, message);
 
-    // Read existing lines
-    let mut lines: Vec<String> = if let Ok(content) = fs::read_to_string(&filename) { content.lines().map(|s| s.to_string()).collect() } else { Vec::new() };
+    let key = filename.to_string_lossy().to_string();
+    let (flush_content, flush_lines) = {
+        let mut buffers = LOG_BUFFERS.lock().unwrap();
+        let buf = buffers.entry(key).or_insert_with(|| LogBuffer {
+            pending: String::new(),
+            pending_lines: 0,
+            last_flush: Instant::now(),
+        });
 
-    // Add new line
-    lines.push(log_line);
+        buf.pending.push_str(&log_line);
+        buf.pending_lines += 1;
 
-    // Keep only last MAX_LOG_LINES
-    if lines.len() > MAX_LOG_LINES
+        let should_flush = buf.pending.len() >= LOG_FLUSH_BYTES
+            || buf.last_flush.elapsed() >= LOG_FLUSH_INTERVAL;
+        if should_flush
+        {
+            let content = std::mem::take(&mut buf.pending);
+            let lines = buf.pending_lines;
+            buf.pending_lines = 0;
+            buf.last_flush = Instant::now();
+            (Some(content), lines)
+        }
+        else
+        {
+            (None, 0)
+        }
+    };
+
+    if let Some(content) = flush_content
     {
-        lines = lines.split_off(lines.len() - MAX_LOG_LINES);
+        flush_log_buffer(&filename, &content, flush_lines);
+    }
+}
+
+fn flush_log_buffer(filename: &std::path::Path, content: &str, lines_written: usize)
+{
+    {
+        let _lock = LOG_WRITE_LOCK.lock().unwrap();
+        if let Ok(mut file) = OpenOptions::new().append(true).create(true).open(filename)
+        {
+            if file.write_all(content.as_bytes()).is_err()
+            {
+                eprintln!("Failed to write log file: {}", filename.display());
+            }
+        }
+        else
+        {
+            eprintln!("Failed to open log file: {}", filename.display());
+        }
     }
 
-    // Write back
-    let content = lines.join("\n") + "\n";
-    if let Err(e) = fs::write(&filename, content)
+    let mut counters = LOG_TRIM_COUNTERS.lock().unwrap();
+    let key = filename.to_string_lossy().to_string();
+    let counter = counters.entry(key).or_insert(0);
+    *counter += lines_written;
+    if *counter >= LOG_TRIM_EVERY
     {
-        eprintln!("Failed to write log file: {}", e);
+        *counter = 0;
+        drop(counters);
+        trim_log_file(filename);
+    }
+}
+
+fn trim_log_file(filename: &std::path::Path)
+{
+    let _lock = LOG_WRITE_LOCK.lock().unwrap();
+    let content = match fs::read_to_string(filename)
+    {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let mut lines: Vec<&str> = content.lines().collect();
+    if lines.len() <= MAX_LOG_LINES
+    {
+        return;
+    }
+
+    let start = lines.len() - MAX_LOG_LINES;
+    lines = lines.split_off(start);
+    let content = lines.join("\n") + "\n";
+    if let Err(e) = fs::write(filename, content)
+    {
+        eprintln!("Failed to trim log file: {}", e);
     }
 }
 
@@ -1006,7 +1093,7 @@ async fn run_account_loop(
                 // Log to character-specific file (skip internal commands)
                 if *cmd_name != "cmd_complete"
                 {
-                    write_character_log(&character.name, character.id, &format!("executing: {}", cmd_name));
+                    // no per-command "executing" log to reduce log spam
                 }
                 // Execute the command
                 let cmd_result: Result<(), String> = {
