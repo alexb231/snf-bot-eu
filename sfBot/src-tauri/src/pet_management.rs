@@ -16,7 +16,7 @@ use sf_api::{
     SimpleSession,
 };
 
-use crate::{city_guard::sleep_between_commands, utils::shitty_print};
+use crate::{bot_runner::write_character_log, city_guard::sleep_between_commands};
 
 pub async fn feed_all_pets(session: &mut SimpleSession, feed_pets: bool, expensive_route: bool, max_pets_to_a_day: usize) -> Result<String, Box<dyn Error>>
 {
@@ -162,6 +162,16 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
     {
         return Ok(("".to_string()));
     }
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
+    struct FeedSummary
+    {
+        habitat: HabitatType,
+        feeds: u16,
+        level: u16,
+        feeds_today: u16,
+    }
+    let mut feed_summaries: HashMap<u32, FeedSummary> = HashMap::new();
 
     let mut available_pets = get_pets_with_minimum_level_and_id(&gs, 1, habitat_type);
     available_pets.sort_by(|a, b| b.0.cmp(&a.0)); // ort pets by descending level
@@ -224,20 +234,21 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
                 pet_fruits_today = fruits_today;
                 fruits_available = new_fruits;
                 total_fruits = new_total;
+                let entry = feed_summaries.entry(pet.id).or_insert(FeedSummary {
+                    habitat: habitat_type,
+                    feeds: 0,
+                    level: pet_level,
+                    feeds_today: pet_fruits_today,
+                });
+                entry.feeds += 1;
+                entry.level = pet_level;
+                entry.feeds_today = pet_fruits_today;
             }
             else
             {
                 break;
             }
 
-            let msg = format!(
-                "Partially completed feeding pet with ID {} at index {} current level: {}, feeds: {}",
-                pet.id,
-                index,
-                pet_level,
-                pet_fruits_today
-            );
-            shitty_print(msg);
         }
     }
     // feed pets based on their desired level and id from the vec desired_levels_vec
@@ -268,6 +279,15 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
                     pet_fruits_today = fruits_today;
                     fruits_available = new_fruits;
                     total_fruits = new_total;
+                    let entry = feed_summaries.entry(pet.id).or_insert(FeedSummary {
+                        habitat: habitat_type,
+                        feeds: 0,
+                        level: pet_level,
+                        feeds_today: pet_fruits_today,
+                    });
+                    entry.feeds += 1;
+                    entry.level = pet_level;
+                    entry.feeds_today = pet_fruits_today;
                 }
                 else
                 {
@@ -276,8 +296,6 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
 
                 if feed_counter >= max_feeds_per_day
                 {
-                    let msg = format!("Daily feeding limit reached: {} pets fed.", max_feeds_per_day);
-                    shitty_print(msg);
                     return Ok(("".to_string()));
                 }
             }
@@ -345,22 +363,41 @@ pub async fn feed_pets_hardcoded_best_route(session: &mut SimpleSession, desired
                     pet_fruits_today = fruits_today;
                     fruits_available = new_fruits;
                     total_fruits = new_total;
+                    let entry = feed_summaries.entry(pet.id).or_insert(FeedSummary {
+                        habitat: habitat_type,
+                        feeds: 0,
+                        level: pet_level,
+                        feeds_today: pet_fruits_today,
+                    });
+                    entry.feeds += 1;
+                    entry.level = pet_level;
+                    entry.feeds_today = pet_fruits_today;
                 }
                 else
                 {
                     break;
                 }
 
-                let msg = format!("Fed pet with ID {} at index {} level: {}", pet.id, index, pet_level);
-                shitty_print(msg);
-
                 if feed_counter >= max_feeds_per_day
                 {
-                    let msg = format!("Daily feeding limit reached: {} pets fed.", max_feeds_per_day);
-                    shitty_print(msg);
                     return Ok(("".to_string()));
                 }
             }
+        }
+    }
+
+    if !feed_summaries.is_empty()
+    {
+        for (pet_id, summary) in feed_summaries
+        {
+            write_character_log(
+                &character_name,
+                character_id,
+                &format!(
+                    "PETS: Fed pet {} ({:?}) level {} (+{} feeds, feeds today: {})",
+                    pet_id, summary.habitat, summary.level, summary.feeds, summary.feeds_today
+                ),
+            );
         }
     }
 
@@ -432,7 +469,6 @@ pub async fn fight_pet_dungeon(session: &mut SimpleSession) -> Result<String, Bo
 
     if (!is_fight_free)
     {
-        shitty_print("fighting habitat for free is not possible");
         return Ok("".to_string());
     }
 

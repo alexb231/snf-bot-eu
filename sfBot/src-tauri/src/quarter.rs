@@ -10,7 +10,7 @@ use sf_api::{
 };
 use tokio::time::sleep;
 
-use crate::{fetch_character_setting, utils::pretty_print};
+use crate::fetch_character_setting;
 
 pub async fn sleep_between_spins(ms: u64) { sleep(Duration::from_millis(ms)).await; }
 
@@ -25,7 +25,6 @@ pub async fn spin_lucky_wheel(session: &mut SimpleSession) -> Result<String, Box
         return Ok(String::from(""));
     }
 
-    pretty_print("Check if lucky spin is available", gs);
     let spin_wheel = true;
     let _spend_mushrooms = true;
     let events = &gs.specials.events.active;

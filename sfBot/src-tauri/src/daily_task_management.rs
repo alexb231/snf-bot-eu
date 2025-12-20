@@ -17,7 +17,7 @@ use sf_api::{
     SimpleSession,
 };
 
-use crate::{fetch_character_setting, inventory_management::sorted_items_with_indices, utils::shitty_print};
+use crate::{fetch_character_setting, inventory_management::sorted_items_with_indices};
 
 #[derive(Debug, Deserialize, Clone)]
 struct PlayerEntry

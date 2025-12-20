@@ -5,7 +5,7 @@ use std::{error::Error, fmt::Debug};
 use chrono::{Duration, Local};
 use sf_api::{command::Command, error::SFError, gamestate::social::OtherPlayer, PlayerId, SimpleSession};
 
-use crate::{fetch_character_setting, utils::pretty_print};
+use crate::fetch_character_setting;
 
 pub async fn test123(name: &str, zahl: usize) -> Result<String, String>
 {
@@ -39,7 +39,6 @@ pub async fn arena_fight(session: &mut SimpleSession) -> Result<String, Box<dyn 
     {
         if next_free_fight >= current_time_minus_3
         {
-            pretty_print("Cannot fight again yet", gamestate);
             return Ok(String::from(""));
         }
     }
@@ -65,8 +64,6 @@ pub async fn arena_fight(session: &mut SimpleSession) -> Result<String, Box<dyn 
         {
             Ok(opponent) =>
             {
-                let msg = format!("Successfully found opponent: {:?}. Lvl: {:?}", opponent.name, opponent.level);
-                pretty_print(msg, gamestate);
                 available_opponents.push(opponent);
             }
             Err(e) =>

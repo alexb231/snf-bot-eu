@@ -18,7 +18,6 @@ use sf_api::gamestate::{
 };
 
 use crate::paths::exe_relative_path;
-use crate::utils::shitty_print;
 
 pub static CHARACTER_ENCOUNTER_COUNTERS: Lazy<Mutex<HashMap<String, HashMap<ExpeditionThing, u32>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
@@ -84,11 +83,6 @@ pub fn print_all_encounter_counts(character_name: &str)
     let char_counters = CHARACTER_ENCOUNTER_COUNTERS.lock().unwrap();
     if let Some(counters) = char_counters.get(character_name)
     {
-        shitty_print(format!("Encounter Counts for {}:", character_name));
-        for (encounter, count) in counters.iter()
-        {
-            shitty_print(format!("{:?}: {}", encounter, count));
-        }
     }
 }
 
@@ -607,9 +601,6 @@ pub fn select_best_expedition_reward_based_on_priority(rewards_to_pick_from: &[R
 //             best_pos = i;
 //         }
 //     }
-//     shitty_print(format!("Reward chosen at position {} with type {:?}
-// (Priority: {:?})", best_pos, rewards_to_pick_from[best_pos].typ,
-// best_priority));     Some(best_pos)
 // }
 //
 // trait RewardTypePriority

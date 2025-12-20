@@ -6,7 +6,7 @@ use chrono::{Local, NaiveTime};
 use sf_api::{command::Command, gamestate::tavern::CurrentAction, SimpleSession};
 use tokio::time::sleep;
 
-use crate::{fetch_character_setting, utils::pretty_print};
+use crate::{bot_runner::write_character_log, fetch_character_setting};
 
 pub async fn sleep_between_commands(ms: u64) { sleep(Duration::from_millis(ms)).await; }
 
@@ -15,7 +15,9 @@ pub async fn city_guard(session: &mut SimpleSession) -> Result<String, Box<dyn E
     // TODO aus der config ziehen ob man die gewollte menge der der biere getrunken
     // hat TODO: think about players that dont want to quest before a certain
     // time we should sent them on guard duty
-    let gs = session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let enable_city_guard_from: String = fetch_character_setting(&gs, "tavernPlayCityGuardFrom").unwrap_or("00:00".to_string());
     let enable_city_guard_to: String = fetch_character_setting(&gs, "tavernPlayCityGuardTo").unwrap_or("00:00".to_string());
     let from_time = NaiveTime::parse_from_str(&enable_city_guard_from, "%H:%M").unwrap();
@@ -51,14 +53,22 @@ pub async fn city_guard(session: &mut SimpleSession) -> Result<String, Box<dyn E
             {
                 if (is_in_range)
                 {
-                    // pretty_print("The character is currently idle and has nothing left to do
-                    // starting work.", gs);
                     session.send_command(Command::StartWork { hours: hours_of_work_at_once as u8 }).await?;
+                    write_character_log(
+                        &character_name,
+                        character_id,
+                        &format!("CITY_GUARD: Started work for {} hours", hours_of_work_at_once),
+                    );
                     return Ok(String::from(format!("Started work for {} hours", hours_of_work_at_once)));
                 }
                 else
                 {
                     session.send_command(Command::StartWork { hours: hours_left as u8 }).await?;
+                    write_character_log(
+                        &character_name,
+                        character_id,
+                        &format!("CITY_GUARD: Started work for {} hours", hours_left),
+                    );
                     return Ok(String::from(format!("Started work for {} hours", hours_left)));
                 }
             }
@@ -67,8 +77,15 @@ pub async fn city_guard(session: &mut SimpleSession) -> Result<String, Box<dyn E
         {
             if (busy_until < Local::now())
             {
-                pretty_print("Character is done working collecting, reward.", gs);
                 session.send_command(Command::FinishWork).await?;
+                write_character_log(
+                    &character_name,
+                    character_id,
+                    &format!(
+                        "CITY_GUARD: Finished work, collected reward (scheduled until {})",
+                        busy_until.format("%H:%M:%S")
+                    ),
+                );
                 return Ok(String::from("Collected city guard reward"));
             }
             return Ok("".to_string());
@@ -85,6 +102,19 @@ pub async fn city_guard(session: &mut SimpleSession) -> Result<String, Box<dyn E
         {
             println!("city guard unknown action block finishing work");
             session.send_command(Command::FinishWork).await?;
+            let msg = match optional_time
+            {
+                Some(time) => format!(
+                    "CITY_GUARD: Finished work, collected reward (scheduled until {})",
+                    time.format("%H:%M:%S")
+                ),
+                None => "CITY_GUARD: Finished work, collected reward".to_string(),
+            };
+            write_character_log(
+                &character_name,
+                character_id,
+                &msg,
+            );
             send_to_hook_city_guard("unknown block city_guard").await;
             return Ok(String::from("Collected city guard reward"));
         }

@@ -4,7 +4,6 @@ use std::{
     collections::{HashMap, HashSet},
     error::Error,
     fmt,
-    fmt::Debug,
     fs,
     fs::OpenOptions,
     hash::Hash,
@@ -482,18 +481,15 @@ pub async fn singleAccountExecution(accountName: &str, pw: &str, charactername: 
                 {
                     if msg == "sessionid invalid"
                     {
-                        shitty_print(format!("\"{:?}\" SESSION INVALID", charactername));
                         let timeout = Duration::from_secs(2); // TODO: aus den configs lesen
                         tokio::time::sleep(timeout).await;
                         return Err("Invalid Session".to_string());
                     } else {
-                        shitty_print(format!("{:?} Returned RANDOM error1", charactername));
                         return Err("ERROR1".to_string());
                     }
                 }
             Err(msg) =>
                 {
-                    shitty_print(format!("{:?} Returned RANDOM error2", charactername));
                     return Err(msg.to_string());
                 }
         }
@@ -641,18 +637,15 @@ pub async fn startedenbot2(accname: &str, pw: &str, id: u32, charname: &str, zie
                     });
                     if msg == "sessionid invalid"
                     {
-                        // shitty_print(format!(""{:?}" SESSION INVALID", charname));
                         let timeout = Duration::from_secs(1); // TODO: aus den configs lesen
                         tokio::time::sleep(timeout).await;
                         return Err("Invalid Session".to_string());
                     } else {
-                        shitty_print(format!("{:?} Returned RANDOM error1", charname));
                         return Err("ERROR1".to_string());
                     }
                 }
             Err(msg) =>
                 {
-                    shitty_print(format!("{:?} Returned RANDOM error2", charname));
                     return Err(msg.to_string());
                 }
         }
@@ -1335,29 +1328,6 @@ pub fn debug_log(message: String) -> Result<(), String>
 {
     println!("{}", message);
     Ok(())
-}
-
-pub fn pretty_print<T: Debug>(value: T, gs: &GameState)
-{
-    let activate_debug_printing: bool = false;
-    if (!activate_debug_printing)
-    {
-        return;
-    } else {
-        println!("{:?} => {:?}", gs.character.name, value);
-    }
-}
-
-pub fn shitty_print<T: Debug>(value: T)
-{
-    // wenn das false ist, wird nichts geprintet.
-    let activate_debug_printing: bool = true;
-    if (!activate_debug_printing)
-    {
-        return;
-    } else {
-        println!("{:?}", value);
-    }
 }
 
 pub async fn log_to_file(file_name: &str, text: &str) -> Result<(), Box<dyn Error>>

@@ -14,11 +14,12 @@ use sf_api::{
 use tokio::time::sleep;
 
 use crate::{
+    bot_runner::write_character_log,
     expedition_utils::{clear_all_encounters_counts, get_all_encounters_counts, get_encounter_count, increment_encounter_count, is_expedition_still_completeable, log_expedition_info, print_all_encounter_counts, select_best_expedition_reward_based_on_priority, should_buy_beer},
     expeditions_gold::{pick_best_crossroads_toilet_paper_gold, try_picking_best_crossroad_based_on_expedition_type_gold},
     fetch_character_setting,
     inventory_management::manage_inventory,
-    utils::{get_global_settings, get_u64_setting, pretty_print, shitty_print},
+    utils::{get_global_settings, get_u64_setting},
 };
 
 pub fn time_remaining<T: Borrow<DateTime<Local>>>(time: T) -> Duration { (*time.borrow() - Local::now()).to_std().unwrap_or_default() }
@@ -108,11 +109,6 @@ pub async fn play_expeditions_exp(session: &mut SimpleSession, char_name: &str, 
                 {
                     if active.current_floor == 10
                     {
-                        if let Some(expedition_type) = &chosen_expedition_type
-                        {
-                            let msg = format!("Expedition chosen: {:?}", expedition_type);
-                            pretty_print(msg, gs);
-                        }
                         print_all_encounter_counts(char_name);
                         log_expedition_info(char_name, gs.character.player_id, &server_host, "exp", active.current_floor, chosen_expedition_type.as_ref(), active.heroism as u32, &get_all_encounters_counts(char_name));
                     }
@@ -259,11 +255,7 @@ pub async fn play_expeditions_exp(session: &mut SimpleSession, char_name: &str, 
                         session.send_command(Command::ExpeditionContinue).await?;
                         // return Ok(String::from(""));
                     }
-                    CurrentAction::Unknown(busy_until) => match busy_until
-                    {
-                        Some(time) => shitty_print("The character is unavailable until {:?}."),
-                        None => shitty_print("The character is unavailable for an unknown duration."),
-                    },
+                    CurrentAction::Unknown(_) => {},
                 }
 
                 if let CurrentAction::Idle = gs.tavern.current_action
@@ -277,6 +269,15 @@ pub async fn play_expeditions_exp(session: &mut SimpleSession, char_name: &str, 
                                 chosen_expedition_type = Some(best_expedition.target.clone());
                                 clear_all_encounters_counts(&*gs.character.name);
                                 session.send_command(Command::ExpeditionStart { pos }).await?;
+                                write_character_log(
+                                    &gs.character.name,
+                                    gs.character.player_id,
+                                    &format!(
+                                        "EXPEDITION_EXP: Started {:?} (thirst {}s)",
+                                        best_expedition.target,
+                                        best_expedition.thirst_for_adventure_sec
+                                    ),
+                                );
                             }
                             else
                             {
@@ -531,7 +532,6 @@ pub fn pick_best_crossroads_toilet_paper_exp(encounters: &[ExpeditionEncounter],
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -745,7 +745,6 @@ fn pick_best_crossroads_revealing_lady_exp(encounters: &[ExpeditionEncounter], c
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -958,7 +957,6 @@ pub fn pick_best_crossroads_bewitched_stew_exp(encounters: &[ExpeditionEncounter
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -1164,7 +1162,6 @@ pub fn pick_best_crossroads_dragon_exp(encounters: &[ExpeditionEncounter], curre
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -1379,7 +1376,6 @@ pub fn pick_best_crossroads_unicorn_exp(encounters: &[ExpeditionEncounter], curr
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -1594,7 +1590,6 @@ pub fn pick_best_crossroads_winners_podium_exp(encounters: &[ExpeditionEncounter
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -1809,7 +1804,6 @@ pub fn pick_best_crossroads_burnt_campfire_exp(encounters: &[ExpeditionEncounter
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -2019,7 +2013,6 @@ pub fn pick_best_crossroads_broken_sword_exp(encounters: &[ExpeditionEncounter],
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -2234,7 +2227,6 @@ pub fn pick_best_crossroads_toxic_fountain_cure_exp(encounters: &[ExpeditionEnco
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -2449,7 +2441,6 @@ pub fn pick_best_crossroads_klaus_exp(encounters: &[ExpeditionEncounter], curren
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
 
     picked_index
@@ -2664,7 +2655,6 @@ pub fn pick_best_crossroads_suckling_pig_exp(encounters: &[ExpeditionEncounter],
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        shitty_print(format!("Picked encounter: {:?}", picked_encounter));
     }
     picked_index
 }
@@ -2692,7 +2682,6 @@ pub fn select_best_expedition_exp(expeditions: &[AvailableExpedition]) -> Option
         .map(|(pos, best_expedition)| {
             let target_name = format!("{:?}", best_expedition.target);
 
-            shitty_print(format!("Expedition chosen at position {} with target {:?} (Priority: {:?})", pos, best_expedition.target, best_expedition.target.priority()));
             (pos, best_expedition)
         })
 }

@@ -101,6 +101,7 @@ pub fn write_character_log(character_name: &str, character_id: u32, message: &st
     let filename = log_path.join(format!("{}_{}.log", character_name, character_id));
     let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
     let log_line = format!("[{}] {}\n", timestamp, message);
+    print!("{}", log_line);
 
     let key = filename.to_string_lossy().to_string();
     let (flush_content, flush_lines) = {

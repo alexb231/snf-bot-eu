@@ -15,11 +15,12 @@ use sf_api::{
 use tokio::time::sleep;
 
 use crate::{
+    bot_runner::write_character_log,
     expedition_utils::{clear_all_encounters_counts, get_all_encounters_counts, get_encounter_count, increment_encounter_count, is_expedition_still_completeable, log_expedition_info, print_all_encounter_counts, select_best_expedition_reward_based_on_priority, should_buy_beer},
     expeditions_exp::{pick_best_crossroads_toilet_paper_exp, try_picking_best_crossroad_based_on_expedition_type_exp},
     fetch_character_setting,
     inventory_management::manage_inventory,
-    utils::{get_global_settings, get_u64_setting, pretty_print},
+    utils::{get_global_settings, get_u64_setting},
 };
 
 pub fn time_remaining<T: Borrow<DateTime<Local>>>(time: T) -> Duration { (*time.borrow() - Local::now()).to_std().unwrap_or_default() }
@@ -105,12 +106,7 @@ pub async fn play_expeditions_gold(session: &mut SimpleSession, char_name: &str,
                 {
                     if active.current_floor == 10
                     {
-                        if let Some(expedition_type) = &chosen_expedition_type
-                        {
-                            pretty_print("Expedition chosen: {:?}", gs);
-                        }
                         print_all_encounter_counts(&*gs.character.name);
-                        pretty_print("Heroism: {}", gs);
                         log_expedition_info(&*gs.character.name, gs.character.player_id, &server_host, "gold", active.current_floor, chosen_expedition_type.as_ref(), active.heroism as u32, &get_all_encounters_counts(&*gs.character.name));
                     }
 
@@ -224,14 +220,10 @@ pub async fn play_expeditions_gold(session: &mut SimpleSession, char_name: &str,
                     {}
                     CurrentAction::CityGuard { hours, busy_until } =>
                     {
-                        let msg = format!("The character is working as a city guard for {} hours, until {:?}.", hours, busy_until);
-                        pretty_print(msg, &gs);
                         return Ok(String::from(""));
                     }
                     CurrentAction::Quest { quest_idx, busy_until } =>
                     {
-                        let msg = format!("The character is on a quest with index {} which will be completed by {}", quest_idx, busy_until);
-                        pretty_print(msg, &gs);
                         return Ok(String::from(""));
                     }
                     CurrentAction::Expedition =>
@@ -240,11 +232,8 @@ pub async fn play_expeditions_gold(session: &mut SimpleSession, char_name: &str,
                         session.send_command(Command::ExpeditionContinue).await?;
                         // return Ok(String::from(""));
                     }
-                    CurrentAction::Unknown(busy_until) => match busy_until
-                    {
-                        Some(time) => pretty_print("The character is unavailable until.", &gs),
-                        None => pretty_print("The character is unavailable for an unknown duration.", &gs),
-                    },
+                    CurrentAction::Unknown(_) =>
+                    {},
                 }
 
                 if let CurrentAction::Idle = gs.tavern.current_action
@@ -258,29 +247,34 @@ pub async fn play_expeditions_gold(session: &mut SimpleSession, char_name: &str,
                                 chosen_expedition_type = Some(best_expedition.target.clone());
                                 clear_all_encounters_counts(&*char_name);
                                 session.send_command(Command::ExpeditionStart { pos }).await?;
+                                write_character_log(
+                                    &gs.character.name,
+                                    gs.character.player_id,
+                                    &format!(
+                                        "EXPEDITION_GOLD: Started {:?} (thirst {}s)",
+                                        best_expedition.target,
+                                        best_expedition.thirst_for_adventure_sec
+                                    ),
+                                );
                             }
                             else
                             {
-                                pretty_print("No suitable expeditions available.", &gs);
                                 return Ok(String::from(""));
                             }
                         }
                         AvailableTasks::Quests(_) =>
                         {
-                            pretty_print("Only quests are available, no expeditions found.", &gs);
                             return Ok(String::from(""));
                         }
                     }
                 }
                 else
                 {
-                    pretty_print("Not idle yet, waiting.", &gs);
                     return Ok(String::from(""));
                 }
             }
             else
             {
-                pretty_print("No thirst to play expeditions.", &gs);
                 return Ok(String::from(""));
             }
         }
@@ -533,7 +527,6 @@ pub fn pick_best_crossroads_toilet_paper_gold(encounters: &[ExpeditionEncounter]
 
         increment_encounter_count(&*char_name, picked_encounter);
 
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -962,7 +955,6 @@ pub fn pick_best_crossroads_bewitched_stew_gold(encounters: &[ExpeditionEncounte
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -1169,7 +1161,6 @@ pub fn pick_best_crossroads_dragon_gold(encounters: &[ExpeditionEncounter], curr
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -1383,7 +1374,6 @@ pub fn pick_best_crossroads_unicorn_gold(encounters: &[ExpeditionEncounter], cur
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -1600,7 +1590,6 @@ pub fn pick_best_crossroads_winners_podium_gold(encounters: &[ExpeditionEncounte
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -1815,7 +1804,6 @@ pub fn pick_best_crossroads_burnt_campfire_gold(encounters: &[ExpeditionEncounte
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -2025,7 +2013,6 @@ fn pick_best_crossroads_broken_sword_gold(encounters: &[ExpeditionEncounter], cu
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -2239,7 +2226,6 @@ fn pick_best_crossroads_toxic_fountain_cure_gold(encounters: &[ExpeditionEncount
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -2460,7 +2446,6 @@ fn pick_best_crossroads_klaus_gold(encounters: &[ExpeditionEncounter], current_f
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -2680,7 +2665,6 @@ fn pick_best_crossroads_suckling_pig_gold(encounters: &[ExpeditionEncounter], cu
     {
         let picked_encounter = encounters[index].typ;
         increment_encounter_count(char_name, picked_encounter);
-        // pretty_print("Picked encounter: {:?}", picked_encounter);
     }
 
     picked_index
@@ -2708,7 +2692,6 @@ fn select_best_expedition_gold(expeditions: &[AvailableExpedition]) -> Option<(u
         })
         .map(|(pos, best_expedition)| {
             let msg = format!("Expedition chosen at position {} with target {:?} (Priority: {:?})", pos, best_expedition.target, best_expedition.target.priority());
-            // pretty_print(msg);
             (pos, best_expedition)
         })
 }
@@ -2764,7 +2747,6 @@ fn pick_best_encounter_gold(encounters: &[ExpeditionEncounter], priority_map: &H
         if let Some(encounter_type) = best_encounter_type
         {
             let encounter_name = format!("{:?}", encounter_type);
-            // pretty_print(
             //     "Crossroad picked at index {} with type {:?} and priority
             // {}",     index, encounter_type, lowest_priority
             // );
@@ -2772,7 +2754,6 @@ fn pick_best_encounter_gold(encounters: &[ExpeditionEncounter], priority_map: &H
     }
     else
     {
-        // pretty_print("No suitable crossroad encounter found.",gs);
     }
     best_index
 }

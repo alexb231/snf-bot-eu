@@ -7,12 +7,11 @@ use sf_api::{
     SimpleSession,
 };
 
-use crate::{fetch_character_setting, lottery::sleep_between_commands, skill_point_list::get_attribute_price_map, utils::pretty_print};
+use crate::{fetch_character_setting, lottery::sleep_between_commands, skill_point_list::get_attribute_price_map};
 
 pub async fn upgrade_skill_points(session: &mut SimpleSession) -> Result<String, Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?;
-    pretty_print(format!("Upgrading skill points for: {:?}", gs.character.name), gs);
     let char_distribution_Str: i32 = fetch_character_setting(&gs, "characterStatDistributionStr").unwrap_or(0);
     let char_distribution_Dex: i32 = fetch_character_setting(&gs, "characterStatDistributionDex").unwrap_or(0);
     let char_distribution_Int: i32 = fetch_character_setting(&gs, "characterStatDistributionInt").unwrap_or(0);

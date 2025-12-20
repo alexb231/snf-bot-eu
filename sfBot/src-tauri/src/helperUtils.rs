@@ -23,7 +23,7 @@ use crate::{
     guild::check_participation,
     pet_management::get_pets_left_for_pet_arena,
     quarter::get_resource_from_setting,
-    utils::{check_time_in_range, pretty_print, shitty_print},
+    utils::check_time_in_range,
     witch_enchantment::should_enchant,
 };
 

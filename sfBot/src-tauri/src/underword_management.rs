@@ -9,10 +9,7 @@ use sf_api::{
 };
 use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 
-use crate::{
-    fetch_character_setting,
-    utils::{check_time_in_range, shitty_print},
-};
+use crate::{bot_runner::write_character_log, fetch_character_setting, utils::check_time_in_range};
 
 pub async fn perform_underworld_atk_suggested_enemy(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
@@ -38,8 +35,6 @@ pub async fn perform_underworld_atk_suggested_enemy(session: &mut SimpleSession)
 
     if (lures_today >= max_lures as u16 || keeper_level < 1)
     {
-        // shitty_print("no keeper build, or max lures for underworld reached
-        // skipping");
         return Ok(String::from(""));
     }
 
@@ -69,10 +64,14 @@ pub async fn perform_underworld_atk_suggested_enemy(session: &mut SimpleSession)
                     if let Some(looked_up_player) = lookup_player
                     {
                         session.send_command(Command::UnderworldAttack { player_id: looked_up_player.player_id }).await?;
+                        write_character_log(
+                            &gs.character.name,
+                            gs.character.player_id,
+                            &format!("UNDERWORLD: Attack sent to {} ({})", looked_up_player.name, looked_up_player.player_id),
+                        );
                     }
                     else
                     {
-                        shitty_print("No suggested player was found for the underworld");
                     }
                 }
             }
@@ -84,7 +83,7 @@ pub async fn perform_underworld_atk_suggested_enemy(session: &mut SimpleSession)
 
 pub async fn perform_underworld_atk_favourite_enemy(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
-    let gs = session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
 
     if gs.underworld.is_none()
     {
@@ -106,8 +105,6 @@ pub async fn perform_underworld_atk_favourite_enemy(session: &mut SimpleSession)
 
     if (lures_today >= max_lures as u16 || keeper_level < 1)
     {
-        // shitty_print("no keeper build, or max lures for underworld reached
-        // skipping");
         return Ok(("".to_string()));
     }
 
@@ -122,6 +119,11 @@ pub async fn perform_underworld_atk_favourite_enemy(session: &mut SimpleSession)
     if let Some(looked_up_player) = lookup_player
     {
         session.send_command(Command::UnderworldAttack { player_id: looked_up_player.player_id }).await?;
+        write_character_log(
+            &gs.character.name,
+            gs.character.player_id,
+            &format!("UNDERWORLD: Attack sent to {} ({})", looked_up_player.name, looked_up_player.player_id),
+        );
         return Ok(format!("Lured {} into the Underworld", looked_up_player.name));
     }
     return Ok(("".to_string()));
@@ -134,6 +136,7 @@ pub async fn collect_underworld_resources(session: &mut SimpleSession) -> Result
     let enable_gold_collection: bool = fetch_character_setting(&gs, "underworldCollectGold").unwrap_or(false);
     let enable_thirst_collection: bool = fetch_character_setting(&gs, "underworldCollectThirst").unwrap_or(false);
     let mut result = String::from("");
+    let mut collected_entries: Vec<String> = Vec::new();
     if let Some(underworld) = &gs.underworld
     {
         let last_updated = match underworld.last_collectable_update
@@ -163,13 +166,17 @@ pub async fn collect_underworld_resources(session: &mut SimpleSession) -> Result
 
             if enable_soul_collection && (underworld.upgrade_building != Some(UnderworldBuildingType::SoulExtractor) && soul_extractor.level > 0)
             {
+                let collectable = underworld.production[UnderworldResourceType::Souls].last_collectable;
                 session.send_command(Command::UnderworldCollect { resource: UnderworldResourceType::Souls }).await?;
+                collected_entries.push(format!("Souls: {}", collectable));
                 // result += "souls ";
             }
 
             if enable_thirst_collection && (underworld.upgrade_building != Some(UnderworldBuildingType::Adventuromatic) && time_machine.level > 0 && *thirst_in_time_machine > 0)
             {
+                let collectable = underworld.production[UnderworldResourceType::ThirstForAdventure].last_collectable;
                 session.send_command(Command::UnderworldCollect { resource: UnderworldResourceType::ThirstForAdventure }).await?;
+                collected_entries.push(format!("Thirst: {}", collectable));
                 // result += " thirst ";
             }
 
@@ -180,7 +187,9 @@ pub async fn collect_underworld_resources(session: &mut SimpleSession) -> Result
                 let is_in_range = check_time_in_range(dont_collect_from, dont_collect_to);
                 if (!is_in_range)
                 {
+                    let collectable = underworld.production[UnderworldResourceType::Silver].last_collectable;
                     session.send_command(Command::UnderworldCollect { resource: UnderworldResourceType::Silver }).await?;
+                    collected_entries.push(format!("Gold: {}", collectable));
                     // result += " gold ";
                 }
             }
@@ -191,6 +200,14 @@ pub async fn collect_underworld_resources(session: &mut SimpleSession) -> Result
     {
         finalMessage += "Collected underworld resources: ";
         finalMessage += &result;
+    }
+    if !collected_entries.is_empty()
+    {
+        write_character_log(
+            &gs.character.name,
+            gs.character.player_id,
+            &format!("UNDERWORLD: Collected {}", collected_entries.join(", ")),
+        );
     }
     Ok(finalMessage)
 }
@@ -208,6 +225,11 @@ pub async fn build_underworld_perfect_order(session: &mut SimpleSession) -> Resu
                 if upgrade_finish <= chrono::Local::now()
                 {
                     session.send_command(Command::UnderworldUpgradeFinish { building: currently_building.clone(), mushrooms: 0 }).await?;
+                    write_character_log(
+                        &gs.character.name,
+                        gs.character.player_id,
+                        &format!("UNDERWORLD: Finished {}", get_building_name(*currently_building)),
+                    );
                 }
             }
             return Ok(String::from(""));
@@ -224,6 +246,11 @@ pub async fn build_underworld_perfect_order(session: &mut SimpleSession) -> Resu
             if current_souls_amount >= souls_required && character_silver >= silver_required
             {
                 session.send_command(Command::UnderworldUpgradeStart { building: building_to_upgrade, mushrooms: 0 }).await?;
+                write_character_log(
+                    &gs.character.name,
+                    gs.character.player_id,
+                    &format!("UNDERWORLD: Upgrading {}", get_building_name(building_to_upgrade)),
+                );
                 result += String::from(format!("Started to upgrade {}", get_building_name(building_to_upgrade))).as_str();
             }
             else
@@ -270,8 +297,6 @@ fn find_next_building(underworld: &Underworld) -> Option<UnderworldBuildingType>
 
         if current_building.level < building_counts[building_type] as u8
         {
-            let msg = format!("level of {:?} building ({}) doesnt match the count ({}). will be upgraded next .", building_type, current_building.level, building_counts[building_type]);
-            shitty_print(msg);
             return Some(building_type);
         }
     }
@@ -280,7 +305,9 @@ fn find_next_building(underworld: &Underworld) -> Option<UnderworldBuildingType>
 
 pub async fn level_up_uw_keeper(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
+    let gs = session.send_command(Command::Update).await?.clone();
     session.send_command(Command::UnderworldUnitUpgrade { unit: UnderworldUnitType::Keeper }).await?;
+    write_character_log(&gs.character.name, gs.character.player_id, "UNDERWORLD: Upgraded Keeper");
     return Ok("Upgraded Keeper in the underworld".to_string());
 }
 

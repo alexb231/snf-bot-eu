@@ -20,8 +20,9 @@ use sf_api::{
 use tokio::time::sleep;
 
 use crate::{
+    bot_runner::write_character_log,
     fetch_character_setting,
-    utils::{check_time_in_range, shitty_print},
+    utils::check_time_in_range,
 };
 
 pub async fn sleep_between_commands(ms: u64) { sleep(Duration::from_millis(ms)).await; }
@@ -78,20 +79,28 @@ pub async fn collect_fortress_resources(session: &mut SimpleSession) -> Result<S
     }
 
     let buildings = fortress.buildings;
+    let mut collected_entries: Vec<String> = Vec::new();
+
     if stone_available && collect_stone
     {
+        let collectable = fortress.resources[Stone].production.last_collectable;
         let _ = session.send_command(Command::FortressGather { resource: Stone }).await?;
         result += "Stone ";
+        collected_entries.push(format!("Stone: {}", collectable));
     }
     if wood_available && collect_wood
     {
+        let collectable = fortress.resources[Wood].production.last_collectable;
         let _ = session.send_command(Command::FortressGather { resource: Wood }).await?;
         result += "Wood ";
+        collected_entries.push(format!("Wood: {}", collectable));
     }
     if exp_available && collect_exp
     {
+        let collectable = fortress.resources[Experience].production.last_collectable;
         let _ = session.send_command(Command::FortressGather { resource: Experience }).await?;
         result += "Experience ";
+        collected_entries.push(format!("Experience: {}", collectable));
     }
 
     let mut finalMessage = String::from("");
@@ -99,6 +108,14 @@ pub async fn collect_fortress_resources(session: &mut SimpleSession) -> Result<S
     {
         finalMessage += "Collected fortress resources: ";
         finalMessage += &result;
+    }
+    if !collected_entries.is_empty()
+    {
+        write_character_log(
+            &gamestate.character.name,
+            gamestate.character.player_id,
+            &format!("FORTRESS: Collected {}", collected_entries.join(", ")),
+        );
     }
     return Ok(String::from(""));
 }
@@ -136,15 +153,6 @@ pub fn check_if_building_is_available(gs: &GameState, building: FortressBuilding
         {
             return true;
         }
-        else
-        {
-            let msg = format!("Building {:?} exists but its level is {}. Level must be greater than 0.", building, building_data.level);
-            // shitty_print(msg);
-        }
-    }
-    else
-    {
-        shitty_print("Cannot search for gem because there is no fortress. Fortress will be built soon.");
     }
 
     false
@@ -152,7 +160,7 @@ pub fn check_if_building_is_available(gs: &GameState, building: FortressBuilding
 
 pub async fn train_fortress_units(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
-    let gamestate = session.send_command(Command::Update).await?;
+    let gamestate = session.send_command(Command::Update).await?.clone();
     let train_soldiers: bool = fetch_character_setting(&gamestate, "fortessTrainSoldiers").unwrap_or(false);
     let train_archers: bool = fetch_character_setting(&gamestate, "fortessTrainArchers").unwrap_or(false);
     let train_mages: bool = fetch_character_setting(&gamestate, "fortessTrainMages").unwrap_or(false);
@@ -250,6 +258,11 @@ pub async fn train_fortress_units(session: &mut SimpleSession) -> Result<String,
         {
             // Send the command to train units
             session.send_command(Command::FortressBuildUnit { unit: key, count: amount_to_train as u32 }).await?;
+            write_character_log(
+                &gamestate.character.name,
+                gamestate.character.player_id,
+                &format!("FORTRESS: Training {} x {}", amount_to_train, current_unit_name),
+            );
         }
     }
 
@@ -284,7 +297,6 @@ pub async fn start_searching_for_gem(session: &mut SimpleSession) -> Result<Stri
         Some(f) => f,
         None =>
         {
-            shitty_print("fortress option is none");
             return Ok(String::from(""));
         }
     };
@@ -297,7 +309,6 @@ pub async fn start_searching_for_gem(session: &mut SimpleSession) -> Result<Stri
 
     if let Some(finish_time) = gem_search_info.finish
     {
-        // shitty_print("Gem search in progress, check if the gem can be collected...");
         if (Local::now() > finish_time)
         {
             if (gamestate.character.inventory.count_free_slots() <= 0)
@@ -369,7 +380,6 @@ pub async fn check_if_enough_resources(session: &mut SimpleSession, building: Fo
         Some(f) => f,
         None =>
         {
-            shitty_print("No fortress available.");
             return false;
         }
     };
@@ -434,7 +444,6 @@ pub async fn attack_fortress(session: &mut SimpleSession) -> Result<String, Box<
         Some(fortress) => fortress,
         None =>
         {
-            shitty_print("No fortress found in the game state.");
             return Ok(String::from(""));
         }
     };
@@ -445,7 +454,6 @@ pub async fn attack_fortress(session: &mut SimpleSession) -> Result<String, Box<
         Some(target) => target,
         None =>
         {
-            shitty_print("No attack target found in the fortress.");
             return Ok(String::from(""));
         }
     };
@@ -475,8 +483,6 @@ pub async fn attack_fortress(session: &mut SimpleSession) -> Result<String, Box<
         Some(player) => player,
         None =>
         {
-            let msg = format!("Player '{}' not found in lookup. Lookup data: {:?}", target, new_gs.lookup);
-            shitty_print(msg);
             return Ok("".to_string());
         }
     };
@@ -486,8 +492,6 @@ pub async fn attack_fortress(session: &mut SimpleSession) -> Result<String, Box<
         Some(advice) => advice,
         None =>
         {
-            let msg = format!("Soldier advice not available for player '{}'. Considering reroll...", player.name);
-            // shitty_print(msg);
             if reroll_fortress_opponnent(session, fortress).await?
             {
                 return Ok("".to_string());
@@ -510,8 +514,6 @@ pub async fn attack_fortress(session: &mut SimpleSession) -> Result<String, Box<
 
     if soldier_advice as u16 > max_soldiers
     {
-        let msg = format!("Soldier advice ({}) exceeds max possible soldiers ({}). Considering reroll...", soldier_advice, max_soldiers);
-        // shitty_print(msg);
         if reroll_fortress_opponnent(session, fortress).await?
         {
             return Ok("".to_string());
@@ -521,7 +523,6 @@ pub async fn attack_fortress(session: &mut SimpleSession) -> Result<String, Box<
 
     if available_soldiers < (soldier_advice as u16) / 2
     {
-        let msg = format!("Available soldiers ({}) are less than 50% of the required ({}). Considering reroll...", available_soldiers, soldier_advice);
         if reroll_fortress_opponnent(session, fortress).await?
         {
             return Ok("".to_string());
@@ -536,8 +537,12 @@ pub async fn attack_fortress(session: &mut SimpleSession) -> Result<String, Box<
 
     if final_attack_count >= soldier_advice as u16
     {
-        let msg = format!("Attacking with boosted count: {} soldiers (advice: {}, multiplier: {}).", final_attack_count, soldier_advice, attack_multiplier);
         session.send_command(Command::FortressAttack { soldiers: final_attack_count as u32 }).await?;
+        write_character_log(
+            &gs.character.name,
+            gs.character.player_id,
+            &format!("FORTRESS: Attack sent with {} soldiers (target: {})", final_attack_count, target),
+        );
         result = format!("Fortress attack sent with {} soldiers!", final_attack_count);
     }
 
@@ -589,7 +594,15 @@ pub async fn build_fortress_our_order(session: &mut SimpleSession) -> Result<Str
                 {
                     match session.send_command(Command::FortressUpgradeHallOfKnights).await
                     {
-                        Ok(_) => return Ok("Upgrading Hall of Knights".to_string()),
+                        Ok(_) =>
+                        {
+                            write_character_log(
+                                &gs.character.name,
+                                gs.character.player_id,
+                                "FORTRESS: Upgrading Hall of Knights",
+                            );
+                            return Ok("Upgrading Hall of Knights".to_string());
+                        }
                         Err(SFError::ServerError(msg)) if is_fortress_resource_error(&msg) => return Ok("".to_string()),
                         Err(err) => return Err(err.into()),
                     }
@@ -599,7 +612,16 @@ pub async fn build_fortress_our_order(session: &mut SimpleSession) -> Result<Str
             {
                 match session.send_command(Command::FortressBuild { f_type: building_to_upgrade }).await
                 {
-                    Ok(_) => return Ok(format!("Upgrading: {}", get_building_name(building_to_upgrade)).to_string()),
+                    Ok(_) =>
+                    {
+                        let building_name = get_building_name(building_to_upgrade);
+                        write_character_log(
+                            &gs.character.name,
+                            gs.character.player_id,
+                            &format!("FORTRESS: Upgrading {}", building_name),
+                        );
+                        return Ok(format!("Upgrading: {}", building_name).to_string());
+                    }
                     Err(SFError::ServerError(msg)) if is_fortress_resource_error(&msg) => return Ok("".to_string()),
                     Err(err) => return Err(err.into()),
                 }
@@ -661,12 +683,6 @@ fn find_next_building(fortress: &Fortress, should_print: bool) -> Option<Fortres
 
         if level < building_counts[building_type] as u16
         {
-            if (should_print)
-            {
-                // shitty_print("level of {:?} is ({}) doesnt match the count
-                // ({}). will be upgraded next .", building_type, level,
-                // building_counts[building_type]);
-            }
             return Some(building_type);
         }
     }
