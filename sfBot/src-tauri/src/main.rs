@@ -181,6 +181,10 @@ async fn main() {
         // Expedition summary
         .route("/api/expeditions/summary", get(api::get_expedition_summary))
 
+        // Coupons
+        .route("/api/coupons/redeem", post(api::redeem_coupon))
+        .route("/api/coupons/status", get(api::coupon_status))
+
         // Global settings
         .route("/api/settings", get(api::get_global_settings))
         .route("/api/settings", post(api::save_global_settings))

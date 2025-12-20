@@ -157,6 +157,10 @@
                                 <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
                                 <span data-i18n="charSettings.applyAllButton">Apply settings to all</span>
                             </button>
+                            <button id="btn-redeem-coupon" class="refresh-btn">
+                                <svg viewBox="0 0 24 24"><path d="M22 10V6a2 2 0 0 0-2-2h-4a2 2 0 0 0-4 0H4a2 2 0 0 0-2 2v4a2 2 0 0 0 0 4v4a2 2 0 0 0 2 2h4a2 2 0 0 0 4 0h8a2 2 0 0 0 2-2v-4a2 2 0 0 0 0-4zm-2 0a2 2 0 0 0 0 4v4h-8v-2h-2v2H4v-4a2 2 0 0 0 0-4V6h8v2h2V6h8z"/></svg>
+                                <span data-i18n="coupon.button">Redeem coupon</span>
+                            </button>
                             <button id="btn-refresh" class="refresh-btn">
                                 <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                                 <span data-i18n="dashboard.refresh">Refresh</span>
@@ -1183,11 +1187,11 @@
     </div>
 
       <!-- Character Log Modal -->
-      <div id="character-log-modal" class="modal">
-          <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h3 id="log-modal-title">Character Log</h3>
-                <button class="modal-close" id="close-char-log">&times;</button>
+    <div id="character-log-modal" class="modal">
+        <div class="modal-content modal-large">
+          <div class="modal-header">
+              <h3 id="log-modal-title">Character Log</h3>
+              <button class="modal-close" id="close-char-log">&times;</button>
       </div>
 
             <div class="modal-body">
@@ -1197,6 +1201,27 @@
                 <button id="log-prev-char" class="btn-secondary">&larr; <span data-i18n="logModal.previous">Previous</span></button>
                 <button id="log-close" class="btn-primary" data-i18n="logModal.close">Close</button>
                 <button id="log-next-char" class="btn-secondary"><span data-i18n="logModal.next">Next</span> &rarr;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coupon Modal -->
+    <div id="coupon-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-i18n="coupon.title">Redeem Coupon</h3>
+                <button class="modal-close" id="close-coupon">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="coupon-code" data-i18n="coupon.code">Coupon code</label>
+                    <input type="text" id="coupon-code" placeholder="CODE-1234">
+                </div>
+                <div id="coupon-result" class="coupon-result hidden"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="coupon-redeem" class="btn-primary" data-i18n="coupon.redeem">Redeem for all</button>
+                <button id="coupon-cancel" class="btn-secondary" data-i18n="coupon.cancel">Cancel</button>
             </div>
         </div>
     </div>
@@ -1247,5 +1272,13 @@
             </div>
         </div>
     </div>
+
+    <div id="coupon-progress" class="coupon-progress hidden" role="status" aria-live="polite">
+        <div class="coupon-progress-spinner"></div>
+        <div class="coupon-progress-text" data-i18n="coupon.background">Redeeming coupons in background...</div>
+        <button id="coupon-progress-close" class="coupon-progress-close" aria-label="Close">&times;</button>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
 </body>
 </html>

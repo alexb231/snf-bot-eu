@@ -17,6 +17,9 @@ pub struct Character {
     /// against places, that also have `player_ids` to make sure a Hall of
     /// Fame entry or similar is not the player
     pub player_id: PlayerId,
+    /// The player save id from the server response (used for payment strings)
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub player_save_id: u64,
     /// The name of this character
     pub name: String,
     /// The current level of this character

@@ -36,6 +36,9 @@ const DEFAULT_DICE_PRIORITY_LIST = [
 
 let expeditionPriorityList = [...DEFAULT_EXPEDITION_PRIORITY_LIST];
 let dicePriorityList = [...DEFAULT_DICE_PRIORITY_LIST];
+let isRedeemingCoupon = false;
+let couponStatusInterval = null;
+let couponProgressDismissed = false;
 
 // ============================================================================
 // Initialization
@@ -67,7 +70,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupLogModal();
     setupExpeditionStatsModal();
     setupExpeditionSummaryModal();
+    setupCouponModal();
     setupSettingsNavigation();
+    await resumeCouponStatusPolling();
 
     // Start refresh interval
     startRefreshInterval();
@@ -153,6 +158,8 @@ function setupBotControls() {
     if (summaryBtn) summaryBtn.addEventListener('click', openExpeditionSummary);
     const settingsAllBtn = document.getElementById('btn-settings-all');
     if (settingsAllBtn) settingsAllBtn.addEventListener('click', openAllCharacterSettings);
+    const couponBtn = document.getElementById('btn-redeem-coupon');
+    if (couponBtn) couponBtn.addEventListener('click', openCouponModal);
 }
 
 async function shutdownServer() {
@@ -1189,6 +1196,252 @@ function setExpeditionSummaryMode(mode) {
 }
 
 // ============================================================================
+// Coupon Modal
+// ============================================================================
+
+function setupCouponModal() {
+    const modal = document.getElementById('coupon-modal');
+    if (!modal) return;
+
+    const closeBtn = document.getElementById('close-coupon');
+    const cancelBtn = document.getElementById('coupon-cancel');
+    const redeemBtn = document.getElementById('coupon-redeem');
+    const input = document.getElementById('coupon-code');
+    const progressClose = document.getElementById('coupon-progress-close');
+
+    if (closeBtn) closeBtn.addEventListener('click', closeCouponModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeCouponModal);
+    if (redeemBtn) redeemBtn.addEventListener('click', redeemCouponForAll);
+    if (input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                redeemCouponForAll();
+            }
+        });
+    }
+    if (progressClose) {
+        progressClose.addEventListener('click', () => {
+            couponProgressDismissed = true;
+            setCouponProgressVisible(false);
+        });
+    }
+}
+
+function openCouponModal() {
+    if (!isRedeemingCoupon) {
+        resetCouponModal();
+    }
+    const modal = document.getElementById('coupon-modal');
+    modal.classList.add('active');
+    const input = document.getElementById('coupon-code');
+    if (input) input.focus();
+}
+
+function closeCouponModal() {
+    const modal = document.getElementById('coupon-modal');
+    modal.classList.remove('active');
+}
+
+function resetCouponModal() {
+    const input = document.getElementById('coupon-code');
+    if (input) input.value = '';
+    setCouponResult('', '');
+}
+
+function setCouponResult(message, status) {
+    const resultEl = document.getElementById('coupon-result');
+    if (!resultEl) return;
+    resultEl.classList.remove('success', 'error', 'hidden');
+    if (!message) {
+        resultEl.textContent = '';
+        resultEl.classList.add('hidden');
+        return;
+    }
+    resultEl.textContent = message;
+    if (status === 'success') {
+        resultEl.classList.add('success');
+    } else if (status === 'error') {
+        resultEl.classList.add('error');
+    }
+}
+
+function formatCouponSummary(result) {
+    const total = result?.results?.length || 0;
+    const applied = typeof result?.applied === 'number' ? result.applied : 0;
+    const failed = typeof result?.failed === 'number' ? result.failed : Math.max(0, total - applied);
+
+    let summary = t('coupon.summary')
+        .replace('{applied}', applied.toString())
+        .replace('{total}', total.toString())
+        .replace('{failed}', failed.toString());
+
+    const failures = (result?.results || []).filter(r => !r.success);
+    if (failures.length > 0) {
+        const rateLimited = failures.filter(r => (r.message || '').toLowerCase().includes('rate limit'));
+        const otherFailures = failures.filter(r => !(r.message || '').toLowerCase().includes('rate limit'));
+        if (rateLimited.length > 0) {
+            summary = `${summary}\n${t('coupon.rateLimitSummary').replace('{count}', rateLimited.length.toString())}`;
+        }
+        if (otherFailures.length > 0) {
+            const maxLines = 8;
+            const lines = otherFailures.slice(0, maxLines).map(r => `${r.name}: ${r.message}`);
+            summary = `${summary}\n${lines.join('\n')}`;
+            if (otherFailures.length > maxLines) {
+                summary = `${summary}\n${t('coupon.moreFailures').replace('{count}', (otherFailures.length - maxLines).toString())}`;
+            }
+        }
+    }
+    return summary;
+}
+
+function startCouponStatusPolling() {
+    if (couponStatusInterval) {
+        clearInterval(couponStatusInterval);
+    }
+    couponStatusInterval = setInterval(() => {
+        pollCouponStatus(true);
+    }, 5000);
+    pollCouponStatus(true);
+}
+
+function stopCouponStatusPolling() {
+    if (couponStatusInterval) {
+        clearInterval(couponStatusInterval);
+        couponStatusInterval = null;
+    }
+}
+
+function setCouponProgressVisible(visible) {
+    const panel = document.getElementById('coupon-progress');
+    if (!panel) return;
+    const shouldShow = visible && !couponProgressDismissed;
+    panel.classList.toggle('hidden', !shouldShow);
+}
+
+async function pollCouponStatus(showToastOnFinish) {
+    try {
+        const status = await invoke('get_coupon_status');
+        if (!status) return;
+
+        if (status.running) {
+            isRedeemingCoupon = true;
+            setCouponProgressVisible(true);
+            return;
+        }
+
+        if (!status.summary && !status.error) {
+            return;
+        }
+
+        stopCouponStatusPolling();
+        isRedeemingCoupon = false;
+        couponProgressDismissed = false;
+        setCouponProgressVisible(false);
+
+        if (status.summary) {
+            const summary = formatCouponSummary(status.summary);
+            const hasFailures = (status.summary.failed || 0) > 0;
+            const toastLevel = hasFailures ? 'warning' : 'success';
+            showLog(summary.split('\n')[0], hasFailures ? 'warning' : 'success');
+            if (showToastOnFinish) {
+                if (hasFailures) {
+                    const toastMessage = t('coupon.toastDone')
+                        .replace('{applied}', (status.summary.applied || 0).toString())
+                        .replace('{total}', (status.summary.results?.length || 0).toString());
+                    showToast(toastMessage, toastLevel);
+                } else {
+                    showToast(t('coupon.toastSuccess'), toastLevel);
+                }
+            }
+            return;
+        }
+
+        if (status.error) {
+            const message = `${t('coupon.error')} ${status.error}`;
+            showLog(message, 'error');
+            if (showToastOnFinish) {
+                showToast(message, 'error');
+            }
+            setCouponProgressVisible(false);
+        }
+    } catch (e) {
+        console.error('Failed to poll coupon status:', e);
+    }
+}
+
+async function resumeCouponStatusPolling() {
+    try {
+        const status = await invoke('get_coupon_status');
+        if (!status) return;
+
+        if (status.running) {
+            isRedeemingCoupon = true;
+            couponProgressDismissed = false;
+            setCouponProgressVisible(true);
+            startCouponStatusPolling();
+            return;
+        }
+
+        if (status.summary) {
+            const summary = formatCouponSummary(status.summary);
+            const hasFailures = (status.summary.failed || 0) > 0;
+            showLog(summary.split('\n')[0], hasFailures ? 'warning' : 'success');
+            return;
+        }
+
+        if (status.error) {
+            showLog(`${t('coupon.error')} ${status.error}`, 'error');
+        }
+    } catch (e) {
+        console.error('Failed to resume coupon status polling:', e);
+    }
+}
+
+async function redeemCouponForAll() {
+    const input = document.getElementById('coupon-code');
+    const redeemBtn = document.getElementById('coupon-redeem');
+    const code = input ? input.value.trim() : '';
+
+    if (isRedeemingCoupon) {
+        showToast(t('coupon.running'), 'warning');
+        return;
+    }
+
+    if (!code) {
+        setCouponResult(t('coupon.empty'), 'error');
+        return;
+    }
+
+    isRedeemingCoupon = true;
+    couponProgressDismissed = false;
+    setCouponProgressVisible(true);
+    if (redeemBtn) redeemBtn.disabled = true;
+    setCouponResult(t('coupon.redeeming'), '');
+
+    try {
+        const result = await invoke('redeem_coupon_all', { code });
+        if (result?.status === 'running') {
+            showToast(t('coupon.running'), 'warning');
+        } else {
+            showToast(t('coupon.started'), 'success');
+        }
+        closeCouponModal();
+        startCouponStatusPolling();
+    } catch (e) {
+        const message = `${t('coupon.error')} ${e.message || e}`;
+        setCouponResult(message, 'error');
+        showLog(message, 'error');
+        showToast(message, 'error');
+        closeCouponModal();
+        isRedeemingCoupon = false;
+        couponProgressDismissed = false;
+        setCouponProgressVisible(false);
+    } finally {
+        if (redeemBtn) redeemBtn.disabled = false;
+    }
+}
+
+// ============================================================================
 // Modals
 // ============================================================================
 
@@ -1793,6 +2046,31 @@ function showLog(message, level = 'info') {
     while (container.children.length > 100) {
         container.removeChild(container.lastChild);
     }
+}
+
+// Toast helper
+function showToast(message, level = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${level}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+
+    const removeToast = () => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            toast.remove();
+        }, 250);
+    };
+
+    toast.addEventListener('click', removeToast);
+    setTimeout(removeToast, 5000);
 }
 
 // Clear logs button

@@ -1,16 +1,21 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use reqwest::header::{HeaderMap, SET_COOKIE};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sf_api::{command::Command, gamestate::GameState, SimpleSession};
+use tokio::sync::Mutex;
+use tokio::time::{sleep, Duration};
 
 use crate::fetch_character_setting;
+use crate::get_all_session_states;
 
 type WebshopResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 const WEB_SHOP_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+const SERVER_CONFIG_URL: &str = "https://sfgame.net/config.json";
+const COUPON_REDEEM_URL: &str = "https://coupon.playa-games.com/redeem";
 
 static WEB_SHOP_CLIENT: Lazy<Client> = Lazy::new(|| {
     Client::builder()
@@ -19,6 +24,9 @@ static WEB_SHOP_CLIENT: Lazy<Client> = Lazy::new(|| {
         .build()
         .expect("failed to build webshop client")
 });
+
+static SERVER_ID_CACHE: Lazy<Mutex<Option<HashMap<String, i32>>>> =
+    Lazy::new(|| Mutex::new(None));
 
 #[derive(Debug, Deserialize)]
 struct WebShopResponse {
@@ -42,6 +50,56 @@ struct WebShopArticle {
     sku: String,
     #[serde(rename = "validAgainInSeconds")]
     valid_again_in_seconds: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct CouponRedeemResult {
+    pub name: String,
+    pub id: u32,
+    pub server: String,
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct CouponRedeemSummary {
+    pub applied: usize,
+    pub failed: usize,
+    pub results: Vec<CouponRedeemResult>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ServerConfig {
+    #[serde(rename = "servers")]
+    servers: Vec<ServerInfo>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ServerInfo {
+    #[serde(rename = "i")]
+    id: i32,
+    #[serde(rename = "d")]
+    domain: String,
+    #[serde(rename = "md")]
+    merged_into: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CouponApiResponse {
+    status: Option<String>,
+    message: Option<String>,
+    success: Option<bool>,
+}
+
+struct CouponHttpResponse {
+    status: reqwest::StatusCode,
+    body: String,
+}
+
+struct CouponOutcome {
+    success: bool,
+    message: String,
+    retryable: bool,
 }
 
 fn url_encode(input: &str) -> String {
@@ -173,6 +231,155 @@ fn truncate_for_log(input: &str, max_len: usize) -> String {
     cleaned
 }
 
+fn normalize_server_host(host: &str) -> String {
+    let trimmed = host.trim();
+    let trimmed = trimmed.strip_prefix("https://").unwrap_or(trimmed);
+    let trimmed = trimmed.strip_prefix("http://").unwrap_or(trimmed);
+    trimmed.trim_end_matches('/').to_ascii_lowercase()
+}
+
+fn is_rate_limit_message(message: &str) -> bool {
+    message.to_ascii_lowercase().contains("rate limit")
+}
+
+fn random_coupon_delay_ms() -> u64 {
+    fastrand::u64(10_000..20_001)
+}
+
+async fn fetch_server_id_map() -> WebshopResult<HashMap<String, i32>> {
+    let response = WEB_SHOP_CLIENT
+        .get(SERVER_CONFIG_URL)
+        .header("Accept", "application/json, text/plain, */*")
+        .header("User-Agent", WEB_SHOP_USER_AGENT)
+        .send()
+        .await?;
+
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        let body = truncate_for_log(&body, 200);
+        return Err(format!("Server config request failed: {status} {body}").into());
+    }
+
+    let config: ServerConfig = serde_json::from_str(&body)?;
+    let mut map = HashMap::new();
+    for server in config.servers {
+        let domain = normalize_server_host(&server.domain);
+        if !domain.is_empty() {
+            map.insert(domain, server.id);
+        }
+        if let Some(merged) = server.merged_into {
+            let merged = normalize_server_host(&merged);
+            if !merged.is_empty() {
+                map.insert(merged, server.id);
+            }
+        }
+    }
+
+    if map.is_empty() {
+        return Err("Server config returned no servers".into());
+    }
+
+    Ok(map)
+}
+
+async fn get_server_id(server_host: &str) -> WebshopResult<i32> {
+    let host = normalize_server_host(server_host);
+    if host.is_empty() {
+        return Err("Server host is empty".into());
+    }
+
+    {
+        let guard = SERVER_ID_CACHE.lock().await;
+        if let Some(map) = guard.as_ref() {
+            if let Some(id) = map.get(&host) {
+                return Ok(*id);
+            }
+        }
+    }
+
+    let map = fetch_server_id_map().await?;
+    let mut guard = SERVER_ID_CACHE.lock().await;
+    *guard = Some(map);
+    guard
+        .as_ref()
+        .and_then(|map| map.get(&host).copied())
+        .ok_or_else(|| format!("Server id not found for {host}").into())
+}
+
+fn build_payment_string(gs: &GameState, server_id: i32) -> Option<String> {
+    let player_id = gs.character.player_id;
+    let player_save_id = gs.character.player_save_id;
+    if player_id == 0 || player_save_id == 0 {
+        return None;
+    }
+    Some(format!("{player_id}_{player_save_id}_{server_id}_1"))
+}
+
+fn parse_coupon_response(
+    status: reqwest::StatusCode,
+    body: &str,
+) -> CouponOutcome {
+    let mut message = String::new();
+    let mut success = status.is_success();
+
+    if let Ok(parsed) = serde_json::from_str::<CouponApiResponse>(body) {
+        if let Some(msg) = parsed.message {
+            message = msg;
+        }
+        if let Some(flag) = parsed.success {
+            success = flag;
+        }
+        if let Some(status_field) = parsed.status {
+            if status_field.eq_ignore_ascii_case("error") {
+                success = false;
+            } else if status_field.eq_ignore_ascii_case("success") {
+                success = true;
+            }
+        }
+    }
+
+    if message.is_empty() {
+        if success {
+            message = "Coupon redeemed".to_string();
+        } else {
+            message = format!("Coupon request failed ({status})");
+        }
+    }
+
+    let retryable = !success
+        && (status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            || is_rate_limit_message(&message));
+
+    CouponOutcome {
+        success,
+        message,
+        retryable,
+    }
+}
+
+async fn send_coupon_request(
+    code: &str,
+    payment_string: &str,
+) -> WebshopResult<CouponHttpResponse> {
+    let response = WEB_SHOP_CLIENT
+        .post(COUPON_REDEEM_URL)
+        .header("Accept", "application/json, text/plain, */*")
+        .header("User-Agent", WEB_SHOP_USER_AGENT)
+        .form(&[
+            ("coupon", code),
+            ("paymentstring", payment_string),
+            ("lang", "en"),
+        ])
+        .send()
+        .await?;
+
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+
+    Ok(CouponHttpResponse { status, body })
+}
+
 async fn fetch_free_article(
     cookie_header: Option<&str>,
 ) -> WebshopResult<Option<WebShopArticle>> {
@@ -265,4 +472,125 @@ pub async fn claim_free_mushroom(
     }
 
     Ok(result)
+}
+
+async fn redeem_coupon_for_session(
+    session: &mut SimpleSession,
+    code: &str,
+) -> CouponRedeemResult {
+    let mut result = CouponRedeemResult {
+        name: session.username().to_string(),
+        id: 0,
+        server: session
+            .server_url()
+            .host_str()
+            .unwrap_or("")
+            .to_string(),
+        success: false,
+        message: String::new(),
+    };
+
+    let max_attempts = 3;
+    for attempt in 1..=max_attempts {
+        let gs = match session.send_command(Command::Update).await {
+            Ok(gs) => gs.clone(),
+            Err(err) => {
+                result.message = format!("Update failed: {err}");
+                if attempt < max_attempts {
+                    sleep(Duration::from_millis(random_coupon_delay_ms())).await;
+                    continue;
+                }
+                return result;
+            }
+        };
+
+        result.name = gs.character.name.clone();
+        result.id = gs.character.player_id;
+        result.server = session
+            .server_url()
+            .host_str()
+            .unwrap_or("")
+            .to_string();
+
+        if result.server.is_empty() {
+            result.message = "Missing server host".to_string();
+            return result;
+        }
+
+        let server_id = match get_server_id(&result.server).await {
+            Ok(id) => id,
+            Err(err) => {
+                result.message = format!("Server id lookup failed: {err}");
+                if attempt < max_attempts {
+                    sleep(Duration::from_millis(random_coupon_delay_ms())).await;
+                    continue;
+                }
+                return result;
+            }
+        };
+
+        let payment_string = match build_payment_string(&gs, server_id) {
+            Some(payment_string) => payment_string,
+            None => {
+                result.message = "Missing player save id".to_string();
+                return result;
+            }
+        };
+
+        let outcome = match send_coupon_request(code, &payment_string).await {
+            Ok(resp) => parse_coupon_response(resp.status, &resp.body),
+            Err(err) => CouponOutcome {
+                success: false,
+                message: err.to_string(),
+                retryable: true,
+            },
+        };
+
+        result.success = outcome.success;
+        result.message = outcome.message;
+
+        if result.success {
+            return result;
+        }
+
+        if attempt < max_attempts {
+            sleep(Duration::from_millis(random_coupon_delay_ms())).await;
+        }
+    }
+
+    result
+}
+
+pub async fn redeem_coupon_for_all(
+    code: &str,
+) -> WebshopResult<CouponRedeemSummary> {
+    let code = code.trim();
+    if code.is_empty() {
+        return Err("Coupon code is empty".into());
+    }
+
+    let session_states = get_all_session_states();
+    if session_states.is_empty() {
+        return Err("No active sessions available".into());
+    }
+
+    let mut results = Vec::with_capacity(session_states.len());
+    let last_index = session_states.len().saturating_sub(1);
+    for (idx, mut session_state) in session_states.into_iter().enumerate() {
+        let result =
+            redeem_coupon_for_session(&mut session_state.session, code).await;
+        results.push(result);
+        if idx < last_index {
+            sleep(Duration::from_millis(random_coupon_delay_ms())).await;
+        }
+    }
+
+    let applied = results.iter().filter(|r| r.success).count();
+    let failed = results.len().saturating_sub(applied);
+
+    Ok(CouponRedeemSummary {
+        applied,
+        failed,
+        results,
+    })
 }

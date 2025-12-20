@@ -14,19 +14,42 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::bot_runner::{AccountInfo, BotRunner};
 use crate::expedition_utils::{read_expedition_stats, read_expedition_summary};
 use crate::utils::{CharacterDisplay, PlayerConfig, UserConfig};
 use crate::{generate_hash, perform_check_whether_user_is_allowed_to_start_bot};
+use crate::webshop::{redeem_coupon_for_all, CouponRedeemSummary};
 
 /// Shared application state
 #[derive(Clone)]
 pub struct AppState {
     pub bot_runner: Arc<RwLock<BotRunner>>,
+}
+
+#[derive(Clone, Default)]
+struct CouponJobState {
+    running: bool,
+    started_at: Option<String>,
+    finished_at: Option<String>,
+    summary: Option<CouponRedeemSummary>,
+    error: Option<String>,
+}
+
+static COUPON_JOB_STATE: Lazy<Mutex<CouponJobState>> =
+    Lazy::new(|| Mutex::new(CouponJobState::default()));
+
+#[derive(Serialize)]
+struct CouponJobStatusResponse {
+    running: bool,
+    started_at: Option<String>,
+    finished_at: Option<String>,
+    summary: Option<CouponRedeemSummary>,
+    error: Option<String>,
 }
 
 // ============================================================================
@@ -404,6 +427,78 @@ pub async fn save_all_character_settings(
             Json(serde_json::json!({"error": e})),
         ),
     }
+}
+
+// ============================================================================
+// Coupon Endpoints
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct RedeemCouponRequest {
+    pub code: String,
+}
+
+/// POST /api/coupons/redeem - Start coupon redemption in the background
+pub async fn redeem_coupon(
+    Json(request): Json<RedeemCouponRequest>,
+) -> impl IntoResponse {
+    let code = request.code.trim().to_string();
+    if code.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "Coupon code is empty"})),
+        );
+    }
+
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    {
+        let mut state = COUPON_JOB_STATE.lock().await;
+        if state.running {
+            return (
+                StatusCode::OK,
+                Json(serde_json::json!({"status": "running"})),
+            );
+        }
+        state.running = true;
+        state.started_at = Some(now.clone());
+        state.finished_at = None;
+        state.summary = None;
+        state.error = None;
+    }
+
+    let code_clone = code.clone();
+    tokio::spawn(async move {
+        let result = redeem_coupon_for_all(&code_clone).await;
+        let mut state = COUPON_JOB_STATE.lock().await;
+        state.running = false;
+        state.finished_at =
+            Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
+        match result {
+            Ok(summary) => {
+                state.summary = Some(summary);
+                state.error = None;
+            }
+            Err(err) => {
+                state.summary = None;
+                state.error = Some(err.to_string());
+            }
+        }
+    });
+
+    (StatusCode::OK, Json(serde_json::json!({"status": "started"})))
+}
+
+/// GET /api/coupons/status - Get background coupon redemption status
+pub async fn coupon_status() -> impl IntoResponse {
+    let state = COUPON_JOB_STATE.lock().await;
+    let response = CouponJobStatusResponse {
+        running: state.running,
+        started_at: state.started_at.clone(),
+        finished_at: state.finished_at.clone(),
+        summary: state.summary.clone(),
+        error: state.error.clone(),
+    };
+    (StatusCode::OK, Json(response))
 }
 
 // ============================================================================

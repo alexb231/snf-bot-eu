@@ -1688,6 +1688,8 @@ impl GameState {
             return Ok(());
         }
 
+        self.character.player_save_id =
+            data.csiget(0, "player save id", 0u64)?;
         self.character.player_id = data.csiget(1, "player id", 0)?;
         self.character.portrait =
             Portrait::parse(data.skip(17, "TODO")?).unwrap_or_default();

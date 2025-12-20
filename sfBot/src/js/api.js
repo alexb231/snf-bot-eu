@@ -221,6 +221,30 @@ async function getCachedCharacters() {
 }
 
 // ============================================================================
+// Coupon API
+// ============================================================================
+
+/**
+ * Redeem coupon code for all active sessions
+ * @param {string} code
+ * @returns {Promise<object>}
+ */
+async function redeemCoupon(code) {
+    return apiRequest('/coupons/redeem', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+    });
+}
+
+/**
+ * Get coupon redemption status
+ * @returns {Promise<object>}
+ */
+async function getCouponStatus() {
+    return apiRequest('/coupons/status');
+}
+
+// ============================================================================
 // Global Settings API
 // ============================================================================
 
@@ -349,6 +373,10 @@ async function invoke(cmd, args = {}) {
             return getCharacterExpeditionStats(args.name, args.id, args.server);
         case 'get_expedition_summary':
             return getExpeditionSummary();
+        case 'redeem_coupon_all':
+            return redeemCoupon(args.code);
+        case 'get_coupon_status':
+            return getCouponStatus();
 
         // Global settings
         case 'get_global_settings':
@@ -414,6 +442,8 @@ if (typeof window !== 'undefined') {
         getCharacterExpeditionStats,
         getExpeditionSummary,
         getCachedCharacters,
+        redeemCoupon,
+        getCouponStatus,
         getGlobalSettings,
         saveGlobalSettings: apiSaveGlobalSettings,
         getUserConfig,
