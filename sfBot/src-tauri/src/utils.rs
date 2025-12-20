@@ -84,7 +84,12 @@ use crate::{
     CurrentCharacterAccount,
     SessionState,
 };
-use crate::{equipment_swapping::check_and_swap_equipment, inventory_management::brew_potions_using_pet_fruits, toilet_management::use_toilet};
+use crate::{
+    equipment_swapping::check_and_swap_equipment,
+    inventory_management::brew_potions_using_pet_fruits,
+    toilet_management::use_toilet,
+    webshop::claim_free_mushroom,
+};
 
 static FILE_LOCK: once_cell::sync::Lazy<Arc<Mutex<()>>> = once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(())));
 
@@ -450,6 +455,7 @@ pub async fn getFunctionNamesToExecute(id: u32, charname: &str) -> Result<Vec<St
         "cmd_collect_fortress_resources".to_string(),
         "cmd_use_toilet".to_string(),
         "cmd_manage_inventory".to_string(),
+        "cmd_collect_free_mushroom".to_string(),
         "cmd_fight_demon_portal".to_string(),
         "cmd_fight_guild_portal".to_string(),
         "cmd_fight_dungeon_with_lowest_level".to_string(),
@@ -601,6 +607,7 @@ pub async fn run_func(session: &mut SimpleSession, ziel: &str, isSingle: bool, s
         "cmd_fight_guild_portal" => cmd_fight_guild_portal(session).await?,
         "cmd_fight_demon_portal" => cmd_fight_demon_portal(session).await?,
         "cmd_manage_inventory" => cmd_manage_inventory(session).await?, // TODO move stuff into sub functions to avoid logic duplication and copy paste errors
+        "cmd_collect_free_mushroom" => cmd_collect_free_mushroom(session).await?,
         "cmd_play_idle_game" => cmd_play_idle_game(session).await?,
         "cmd_upgrade_skill_points" => cmd_upgrade_skill_points(session).await?,
         "cmd_collect_fortress_resources" => cmd_collect_fortress_resources(session).await?,
@@ -746,6 +753,18 @@ pub async fn cmd_collect_daily_and_weekly_rewards(session: &mut SimpleSession) -
 {
     let result = collect_daily_and_weekly_rewards(session).await?;
     Ok(result)
+}
+
+pub async fn cmd_collect_free_mushroom(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
+{
+    claim_free_mushroom(session)
+        .await
+        .map_err(|e| {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            )) as Box<dyn std::error::Error>
+        })
 }
 pub async fn cmd_use_toilet(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {

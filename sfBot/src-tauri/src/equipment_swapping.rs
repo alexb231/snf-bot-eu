@@ -341,6 +341,10 @@ fn inventory_place_for_bag_pos(pos: BagPosition) -> (PlayerItemPlace, usize)
 pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let min_boost_percent: f64 =
+        fetch_character_setting(&gs, "itemsEquipSwapMinBoostPercent")
+            .unwrap_or(0)
+            .max(0) as f64;
 
     // Best candidate per equipment slot: bag position + boost
     let mut best_by_slot: HashMap<EquipmentSlot, (BagPosition, f64)> =
@@ -371,7 +375,7 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
         }
 
         let boost = check_item_boost(&gs, item, true);
-        if boost <= 0.0
+        if boost <= 0.0 || boost < min_boost_percent
         {
             continue;
         }

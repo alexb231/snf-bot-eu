@@ -1,6 +1,6 @@
 [package]
 name = "sfbot"
-version = "1.0.2"
+version = "1.0.3"
 description = "SF Bot HTTP API Server"
 authors = ["you"]
 edition = "2021"

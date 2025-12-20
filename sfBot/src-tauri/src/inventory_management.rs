@@ -15,7 +15,11 @@ use sf_api::{
     SimpleSession,
 };
 
-use crate::{fetch_character_setting, lottery::sleep_between_commands};
+use crate::{
+    equipment_swapping::check_and_swap_equipment,
+    fetch_character_setting,
+    lottery::sleep_between_commands,
+};
 
 fn check_type<T: std::fmt::Debug>(x: T)
 {
@@ -25,8 +29,8 @@ fn check_type<T: std::fmt::Debug>(x: T)
 // TODO think about dismantling
 pub async fn manage_inventory(session: &mut SimpleSession) -> Result<String, Box<dyn Error>>
 {
-    let gs = &session.send_command(Command::Update).await?.clone();
-    let free_slots = gs.character.inventory.count_free_slots();
+    let mut gs = session.send_command(Command::Update).await?.clone();
+    let mut free_slots = gs.character.inventory.count_free_slots();
 
     let amount_of_slots_to_keep_free: i32 = std::cmp::min(fetch_character_setting(&gs, "itemsInventorySlotsToBeLeft").unwrap_or(0), 1);
     let sell_items_to_witch: bool = fetch_character_setting(&gs, "itemsImmediatelyThrowIntoCauldron").unwrap_or(false);
@@ -44,9 +48,25 @@ pub async fn manage_inventory(session: &mut SimpleSession) -> Result<String, Box
         let witch_event_active = events.contains(&Event::WitchesDance);
         sell_item_to_witch(session, witch_event_active, exclude_epics_from_witch_selling).await?;
     }
+    gs = session.send_command(Command::Update).await?.clone();
+    free_slots = gs.character.inventory.count_free_slots();
+
     if free_slots > amount_of_slots_to_keep_free as usize
     {
         return Ok(String::from(""));
+    }
+
+    let equip_before_selling: bool =
+        fetch_character_setting(&gs, "itemsEquipBeforeSelling").unwrap_or(false);
+    if equip_before_selling
+    {
+        check_and_swap_equipment(session).await?;
+        gs = session.send_command(Command::Update).await?.clone();
+        free_slots = gs.character.inventory.count_free_slots();
+        if free_slots > amount_of_slots_to_keep_free as usize
+        {
+            return Ok(String::from(""));
+        }
     }
     // only when inventory is full
     let result = sell_two_cheapest_items(session, exclude_epics_from_witch_selling).await?;

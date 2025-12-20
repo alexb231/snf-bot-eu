@@ -1366,7 +1366,7 @@ function populateCharacterSettings(settings) {
         'itemsPotionsIntSmallBuy', 'itemsPotionsIntMediumBuy', 'itemsPotionsIntLargeBuy',
         'itemsPotionsConstSmallBuy', 'itemsPotionsConstMediumBuy', 'itemsPotionsConstLargeBuy',
         'itemsPotionsLuckSmallBuy', 'itemsPotionsLuckMediumBuy', 'itemsPotionsLuckLargeBuy',
-        'itemsMagicShopBuyHourglasses', 'itemsBrewPotionsUsingFruits', 'itemsEnableEquipmentSwap',
+        'itemsMagicShopBuyHourglasses', 'itemsBrewPotionsUsingFruits', 'itemsEnableEquipmentSwap', 'itemsEquipBeforeSelling',
         'arenaCheckbox', 'arenaStopWhenDone', 'arenaFillScrapbook',
         'quartersOrderAtk', 'quartersSignUpGuildAtks', 'quartersSignUpGuildDef', 'quartersSignUpHydra',
         'quarterFightDungeonPortal', 'quartersCollectMailRewards', 'quartersSpinLuckyWheel',
@@ -1378,7 +1378,7 @@ function populateCharacterSettings(settings) {
         'characterIncreaseStatAttributes', 'enableBuyingMount',
         'petsDoFights', 'petsDoDungeons', 'petsDoFeed',
         'miscCollectCalendar', 'miscCollectCalendarExpOnly', 'miscCollectCalendarMushroomsCalendar',
-        'miscCollectDailyRewards', 'miscCollectWeeklyRewards',
+        'miscCollectDailyRewards', 'miscCollectWeeklyRewards', 'miscCollectFreeMushroom',
         'miscPerformDailyGambling', 'miscPerformDailyBareHand',
         'miscPerformDailyFightWarrior', 'miscPerformDailyFightScout', 'miscPerformDailyFightMage',
         'miscPerformDailyFightAssassin', 'miscPerformDailyFightBattleMage', 'miscPerformDailyFightBerserker',
@@ -1399,7 +1399,7 @@ function populateCharacterSettings(settings) {
     // Number inputs
     const numbers = [
         'tavernDrinkBeerAmount', 'tavernCityGuardTimeToPlay',
-        'itemsInventoryMinGoldSaved', 'itemsInventoryMinMushroomsSaved', 'itemsInventorySlotsToBeLeft', 'itemsKeepGemPercent',
+        'itemsInventoryMinGoldSaved', 'itemsInventoryMinMushroomsSaved', 'itemsInventorySlotsToBeLeft', 'itemsKeepGemPercent', 'itemsEquipSwapMinBoostPercent',
         'quartersSpinLuckyWithResourcesAmount', 'quartersHellevatorKeyCardsKeep', 'quartersHellevatorJoinRaidFloor',
         'fortressAdditionalSoldierPercent',
         'underworldUpgradeKeeperSoulsToKeep',
@@ -1410,7 +1410,7 @@ function populateCharacterSettings(settings) {
 
     numbers.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.value = settings[id] || '';
+        if (el) el.value = settings[id] ?? '';
     });
 
     // Time inputs

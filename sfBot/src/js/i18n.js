@@ -193,6 +193,8 @@ const translations = {
         "items.keepGemPercent": "Keep gems if >= % of current",
         "items.equipmentSwap": "Equipment Swap",
         "items.enableSwap": "Enable equipment swap",
+        "items.equipBeforeSelling": "Equip better gear before selling",
+        "items.equipSwapMinBoost": "Min improvement to swap (%)",
 
         // Arena Settings
         "arena.title": "Arena",
@@ -303,6 +305,8 @@ const translations = {
         "misc.rewards": "Rewards",
         "misc.collectDaily": "Collect daily rewards",
         "misc.collectWeekly": "Collect weekly rewards",
+        "misc.webshop": "Webshop",
+        "misc.collectFreeMushroom": "Collect free mushroom",
         "misc.dailyTasks": "Daily Tasks",
         "misc.gambling": "Gambling",
         "misc.bareHand": "Bare hand attack",
@@ -576,6 +580,8 @@ const translations = {
         "items.keepGemPercent": "Edelsteine behalten wenn >= % der aktuellen",
         "items.equipmentSwap": "Ausruestung tauschen",
         "items.enableSwap": "Ausruestung tauschen aktivieren",
+        "items.equipBeforeSelling": "Bessere Ausruestung vor dem Verkaufen anlegen",
+        "items.equipSwapMinBoost": "Min Verbesserung zum Tauschen (%)",
 
         // Arena Settings
         "arena.title": "Arena",
@@ -686,6 +692,8 @@ const translations = {
         "misc.rewards": "Belohnungen",
         "misc.collectDaily": "Taegliche Belohnungen sammeln",
         "misc.collectWeekly": "Woechentliche Belohnungen sammeln",
+        "misc.webshop": "Webshop",
+        "misc.collectFreeMushroom": "Gratis Pilz sammeln",
         "misc.dailyTasks": "Taegliche Aufgaben",
         "misc.gambling": "Gluecksspiel",
         "misc.bareHand": "Unbewaffneter Angriff",

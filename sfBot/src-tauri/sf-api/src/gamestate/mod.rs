@@ -242,7 +242,6 @@ impl GameState {
                 | "languagecodelist"
                 | "tracking"
                 | "skipvideo"
-                | "webshopid"
                 | "cidstring"
                 | "mountexpired"
                 | "tracking_netto"
@@ -281,7 +280,20 @@ impl GameState {
                         }
                     }
                 }
-                "sfhomeid" => {}
+                "sfhomeid" => {
+                    let id = from_sf_string(val.as_str());
+                    let id = id.trim();
+                    if !id.is_empty() {
+                        self.character.sf_home_id = Some(id.to_string());
+                    }
+                }
+                "webshopid" => {
+                    let id = from_sf_string(val.as_str());
+                    let id = id.trim();
+                    if !id.is_empty() {
+                        self.character.webshop_id = Some(id.to_string());
+                    }
+                }
                 "backpack" => {
                     let data: Vec<i64> = val.into_list("backpack")?;
                     self.character.inventory.backpack = data

@@ -75,6 +75,11 @@ pub struct Character {
     /// Important to calculate the price of the next attribute to buy
     pub attribute_times_bought: EnumMap<AttributeType, u32>,
 
+    /// The SF home id used by the webshop API (if provided by the server)
+    pub sf_home_id: Option<String>,
+    /// The webshop id used by the webshop API (if provided by the server)
+    pub webshop_id: Option<String>,
+
     /// The mount this character has rented
     pub mount: Option<Mount>,
     /// The point at which the mount will end. Note that this might be None,

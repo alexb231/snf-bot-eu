@@ -605,8 +605,6 @@ impl SimpleSession {
         let global_map = get_global_settings().await.unwrap_or_default();
         let min_wait = get_u64_setting(&global_map, "globalSleepTimesMin", 50);
         let max_wait = get_u64_setting(&global_map, "globalSleepTimesMax", 100);
-        let duration = Duration::from_millis(fastrand::u64(min_wait..max_wait));
-        // println!("duration {:?}", duration);
         tokio::time::sleep(Duration::from_millis(fastrand::u64(
             min_wait..max_wait,
         )))

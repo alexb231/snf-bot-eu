@@ -666,6 +666,14 @@
                                 <input type="checkbox" id="itemsEnableEquipmentSwap">
                                 <label for="itemsEnableEquipmentSwap" data-i18n="items.enableSwap">Enable equipment swap</label>
                             </div>
+                            <div class="setting-row">
+                                <input type="checkbox" id="itemsEquipBeforeSelling">
+                                <label for="itemsEquipBeforeSelling" data-i18n="items.equipBeforeSelling">Equip better gear before selling</label>
+                            </div>
+                            <div class="setting-row">
+                                <label for="itemsEquipSwapMinBoostPercent" data-i18n="items.equipSwapMinBoost">Min improvement to swap (%)</label>
+                                <input type="number" id="itemsEquipSwapMinBoostPercent" min="0" max="999" value="0">
+                            </div>
                         </div>
                     </div>
 
@@ -1021,6 +1029,14 @@
                             <div class="setting-row">
                                 <input type="checkbox" id="miscCollectWeeklyRewards">
                                 <label for="miscCollectWeeklyRewards" data-i18n="misc.collectWeekly">Collect weekly rewards</label>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4 data-i18n="misc.webshop">Webshop</h4>
+                            <div class="setting-row">
+                                <input type="checkbox" id="miscCollectFreeMushroom">
+                                <label for="miscCollectFreeMushroom" data-i18n="misc.collectFreeMushroom">Collect free mushroom</label>
                             </div>
                         </div>
 

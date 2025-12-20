@@ -130,7 +130,9 @@ const COMMANDS_TO_EXECUTE: &[&str] = &[
     "cmd_play_idle_game",
     "cmd_collect_fortress_resources",
     "cmd_use_toilet",
+    "cmd_check_and_swap_equipment",
     "cmd_manage_inventory",
+    "cmd_collect_free_mushroom",
     "cmd_fight_demon_portal",
     "cmd_fight_guild_portal",
     "cmd_fight_dungeon_with_lowest_level",
@@ -143,7 +145,6 @@ const COMMANDS_TO_EXECUTE: &[&str] = &[
     "cmd_collect_underworld_resources",
     "cmd_build_underworld_perfect_order",
     "cmd_fight_pet_arena",
-    "cmd_check_and_swap_equipment",
     "cmd_perform_daily_tasks",
     "cmd_buy_mount",
     "cmd_spin_lucky_wheel",
@@ -177,6 +178,7 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_collect_fortress_resources", 30 * 60_000);
     cooldowns.insert("cmd_use_toilet", 120 * 60_000);
     cooldowns.insert("cmd_manage_inventory", 5 * 60_000);
+    cooldowns.insert("cmd_collect_free_mushroom", 180 * 60_000);
     cooldowns.insert("cmd_fight_demon_portal", 30 * 60_000);
     cooldowns.insert("cmd_fight_guild_portal", 30 * 60_000);
     cooldowns.insert("cmd_fight_dungeon_with_lowest_level", 10 * 60_000);
@@ -189,7 +191,7 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_collect_underworld_resources", 30 * 60_000);
     cooldowns.insert("cmd_build_underworld_perfect_order", 5 * 60_000);
     cooldowns.insert("cmd_fight_pet_arena", 15 * 60_000);
-    cooldowns.insert("cmd_check_and_swap_equipment", 10 * 60_000);
+    cooldowns.insert("cmd_check_and_swap_equipment", 3 * 60_000);
     cooldowns.insert("cmd_perform_daily_tasks", 60 * 60_000);
     cooldowns.insert("cmd_buy_mount", 15 * 60_000);
     cooldowns.insert("cmd_spin_lucky_wheel", 10 * 60_000);

@@ -564,6 +564,14 @@ pub fn skipFunction(gs: &GameState, funcToExecute: &str) -> bool
             }
             return false;
         }
+        "cmd_collect_free_mushroom" =>
+        {
+            let enable_collect: bool = fetch_character_setting(&gs, "miscCollectFreeMushroom").unwrap_or(false);
+            if !enable_collect {
+                skip_with_reason!(gs, funcToExecute, "miscCollectFreeMushroom=false");
+            }
+            return false;
+        }
         "cmd_start_searching_for_gem" =>
         {
             let enable_gem_search: bool = fetch_character_setting(&gs, "fortessSearchForGems").unwrap_or(false);

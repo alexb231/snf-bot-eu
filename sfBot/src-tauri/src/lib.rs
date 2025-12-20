@@ -38,6 +38,7 @@ mod underword_management;
 mod unlockables;
 mod updater;
 mod utils;
+mod webshop;
 mod witch_enchantment;
 
 use sha1::{Digest, Sha1};
