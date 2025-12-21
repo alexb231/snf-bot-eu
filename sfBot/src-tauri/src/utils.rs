@@ -777,7 +777,7 @@ pub async fn cmd_complete(session: &mut SimpleSession) -> Result<String, Box<dyn
             }
         }
 
-        tokio::time::sleep(std::time::Duration::from_millis(fastrand::u64(5_000..12_001))).await;
+        tokio::time::sleep(std::time::Duration::from_millis(fastrand::u64(1_000..5_001))).await;
     }
     let mut result = String::from("");
     Ok(result)
