@@ -16,8 +16,10 @@ use sf_api::{
 };
 
 use crate::{
+    bot_runner::write_character_log,
     equipment_swapping::check_and_swap_equipment,
     fetch_character_setting,
+    gem_stats::record_gem_stat,
     lottery::sleep_between_commands,
 };
 
@@ -105,6 +107,7 @@ pub async fn buy_potions_and_hourglasses(session: &mut SimpleSession) -> Result<
                         shop_pos: pos,
                         inventory: get_inventory_based_on_index(free_slot_index),
                         inventory_pos: adjust_free_slot_index(free_slot_index),
+                        item_ident: item.command_ident(),
                     })
                     .await
                 {
@@ -122,6 +125,8 @@ pub async fn buy_potions_and_hourglasses(session: &mut SimpleSession) -> Result<
 pub async fn check_whether_hourglas_is_in_inv(session: &mut SimpleSession) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let char_inventory = gs.character.inventory;
     let sorted_items_with_indices = sorted_items_with_indices(&char_inventory);
 
@@ -129,7 +134,18 @@ pub async fn check_whether_hourglas_is_in_inv(session: &mut SimpleSession) -> Re
     {
         if item.typ == ItemType::QuickSandGlass
         {
-            session.send_command(Command::UsePotion { from: MainInventory, from_pos: pos }).await?;
+            session
+                .send_command(Command::UsePotion {
+                    from: MainInventory,
+                    from_pos: pos,
+                    item_ident: item.command_ident(),
+                })
+                .await?;
+            write_character_log(
+                &character_name,
+                character_id,
+                &format!("POTION: used hourglass pos={}", pos),
+            );
         }
     }
     return Ok(());
@@ -138,6 +154,8 @@ pub async fn check_whether_hourglas_is_in_inv(session: &mut SimpleSession) -> Re
 pub async fn drink_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let character_pots = &gs.character.active_potions;
     let amount_of_active_potions = character_pots.iter().filter(|p| p.is_some()).count();
     let all_pots_are_none = character_pots.iter().all(|p| p.is_none());
@@ -156,7 +174,7 @@ pub async fn drink_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Er
         {
             if should_drink_potion_from_settings(&gs, potion.typ, potion.size)
             {
-                potion_to_drink.push((pos, MainInventory, item.typ.clone()));
+                potion_to_drink.push((pos, item.command_ident(), item.typ));
             }
         }
     }
@@ -165,19 +183,34 @@ pub async fn drink_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Er
     {
         if (amount_of_active_potions < 3 || all_pots_are_none)
         {
-            for (pos, inventory_type, item_type) in potion_to_drink
+            for (pos, item_ident, item_type) in potion_to_drink
             {
-                let drink_potion_command = Command::UsePotion { from: MainInventory, from_pos: pos };
+                let drink_potion_command = Command::UsePotion {
+                    from: MainInventory,
+                    from_pos: pos,
+                    item_ident,
+                };
                 if let Err(err) = session.send_command(drink_potion_command).await
                 {
                     eprintln!("Error: func drink_potions while executing UsePotion command: {}", err);
                     return Ok(());
                 }
+                if let ItemType::Potion(potion) = item_type
+                {
+                    write_character_log(
+                        &character_name,
+                        character_id,
+                        &format!(
+                            "POTION: drank typ={:?} size={:?} pos={}",
+                            potion.typ, potion.size, pos
+                        ),
+                    );
+                }
             }
         }
         else
         {
-            for (pos, inventory_type, item_type) in &potion_to_drink
+            for (pos, item_ident, item_type) in &potion_to_drink
             {
                 if let ItemType::Potion(potion) = item_type
                 {
@@ -187,8 +220,20 @@ pub async fn drink_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Er
                         {
                             if p.typ == potion.typ && p.size == potion.size
                             {
-                                let drink_potion_command = Command::UsePotion { from: MainInventory, from_pos: *pos };
+                                let drink_potion_command = Command::UsePotion {
+                                    from: MainInventory,
+                                    from_pos: *pos,
+                                    item_ident: *item_ident,
+                                };
                                 session.send_command(drink_potion_command).await?;
+                                write_character_log(
+                                    &character_name,
+                                    character_id,
+                                    &format!(
+                                        "POTION: drank typ={:?} size={:?} pos={}",
+                                        potion.typ, potion.size, pos
+                                    ),
+                                );
                             }
                         }
                     }
@@ -248,6 +293,8 @@ pub async fn check_for_pet_egg(session: &mut SimpleSession) -> Result<std::strin
 pub async fn sell_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let char_inventory = &gs.character.inventory.clone();
     let sorted_items_with_indices = sorted_items_with_indices(char_inventory);
 
@@ -260,18 +307,30 @@ pub async fn sell_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Err
         {
             if should_sell_potion_from_settings(&gs, potion.typ, potion.size)
             {
-                potions_to_sell.push((pos, MainInventory, item.typ.clone()));
+                potions_to_sell.push((pos, item.command_ident(), item.typ));
             }
         }
     }
 
-    for (pos, inventory_type, item_type) in potions_to_sell
+    for (pos, item_ident, item_type) in potions_to_sell
     {
         let sell_command = Command::SellShop {
             inventory: PlayerItemPlace::MainInventory,
             inventory_pos: pos,
+            item_ident,
         };
         session.send_command(sell_command).await?;
+        if let ItemType::Potion(potion) = item_type
+        {
+            write_character_log(
+                &character_name,
+                character_id,
+                &format!(
+                    "SELL: potion typ={:?} size={:?} pos={}",
+                    potion.typ, potion.size, pos
+                ),
+            );
+        }
     }
 
     return Ok(());
@@ -280,6 +339,13 @@ pub async fn sell_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Err
 pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
+    let server = session
+        .server_url()
+        .host_str()
+        .unwrap_or("unknown")
+        .to_ascii_lowercase();
     let char_inventory = &gs.character.inventory.clone();
 
     let sorted_items_with_indices = sorted_items_with_indices(char_inventory);
@@ -292,18 +358,37 @@ pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>
         {
             if should_sell_gem(&gs, gem.typ, gem.value)
             {
-                gems_to_sell.push((pos, MainInventory, item.typ.clone()));
+                gems_to_sell.push((pos, item.command_ident(), item.typ));
             }
         }
     }
 
-    for (pos, inventory_type, item_type) in gems_to_sell
+    for (pos, item_ident, item_type) in gems_to_sell
     {
         let sell_command = Command::SellShop {
             inventory: PlayerItemPlace::MainInventory,
             inventory_pos: pos,
+            item_ident,
         };
         session.send_command(sell_command).await?;
+        if let ItemType::Gem(gem) = item_type
+        {
+            write_character_log(
+                &character_name,
+                character_id,
+                &format!(
+                    "SELL: gem typ={:?} value={} pos={}",
+                    gem.typ, gem.value, pos
+                ),
+            );
+            record_gem_stat(
+                &character_name,
+                character_id,
+                &server,
+                gem.typ,
+                gem.value,
+            );
+        }
     }
 
     return Ok(());
@@ -312,6 +397,8 @@ pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>
 pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active: bool, exclude_epics_from_witch_selling: bool) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?;
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     if gs.character.level < 66
     {
         return Ok(());
@@ -336,8 +423,21 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
             if (exclude_epics_from_witch_selling)
             {
                 // doesnt sell epics nor legys
-                let items_to_sell = collect_items_to_sell_no_epics_no_legendary(inventory);
-                for (pos) in items_to_sell
+                let items_to_sell = {
+                    let items_to_sell =
+                        collect_items_to_sell_no_epics_no_legendary(inventory);
+                    items_to_sell
+                        .into_iter()
+                        .filter_map(|pos| {
+                            inventory
+                                .backpack
+                                .get(pos)
+                                .and_then(|slot| slot.as_ref())
+                                .map(|item| (pos, item.typ, item.price))
+                        })
+                        .collect::<Vec<_>>()
+                };
+                for (pos, item_typ, item_price) in items_to_sell
                 {
                     let drop_command = Command::WitchDropCauldron {
                         inventory_t: PlayerItemPlace::MainInventory,
@@ -345,20 +445,51 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
                     };
 
                     session.send_command(drop_command).await?;
+                    write_character_log(
+                        &character_name,
+                        character_id,
+                        &format!(
+                            "WITCH: dropped pos={} item={:?} price={}",
+                            pos, item_typ, item_price
+                        ),
+                    );
                 }
                 return Ok(());
             }
             else
             {
                 // sells epics and legys as well
-                let items_to_sell = collect_items_to_sell_including_epics_and_legendaries(inventory);
-                for (pos) in items_to_sell
+                let items_to_sell = {
+                    let items_to_sell =
+                        collect_items_to_sell_including_epics_and_legendaries(
+                            inventory,
+                        );
+                    items_to_sell
+                        .into_iter()
+                        .filter_map(|pos| {
+                            inventory
+                                .backpack
+                                .get(pos)
+                                .and_then(|slot| slot.as_ref())
+                                .map(|item| (pos, item.typ, item.price))
+                        })
+                        .collect::<Vec<_>>()
+                };
+                for (pos, item_typ, item_price) in items_to_sell
                 {
                     let drop_command = Command::WitchDropCauldron {
                         inventory_t: PlayerItemPlace::MainInventory,
                         position: pos,
                     };
                     session.send_command(drop_command).await?;
+                    write_character_log(
+                        &character_name,
+                        character_id,
+                        &format!(
+                            "WITCH: dropped pos={} item={:?} price={}",
+                            pos, item_typ, item_price
+                        ),
+                    );
                 }
                 return Ok(());
             }
@@ -367,12 +498,22 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
         {
             if let Some((pos, item)) = find_required_item_for_witch(inventory, required_slot, exclude_epics_from_witch_selling)
             {
+                let item_typ = item.typ;
+                let item_price = item.price;
                 let drop_command = Command::WitchDropCauldron {
                     inventory_t: PlayerItemPlace::MainInventory,
                     position: pos,
                 };
 
                 session.send_command(drop_command).await?;
+                write_character_log(
+                    &character_name,
+                    character_id,
+                    &format!(
+                        "WITCH: dropped pos={} item={:?} price={}",
+                        pos, item_typ, item_price
+                    ),
+                );
                 return Ok(());
             }
             else
@@ -423,6 +564,8 @@ fn items_to_sell_or_should_sell_to_witch_includes_epics_and_legendaries(item: &I
 pub async fn sell_two_cheapest_items(session: &mut SimpleSession, exclude_epics_from_witch_selling: bool) -> Result<String, Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let character_class = &gs.character.class;
     let character_inventory = &gs.character.inventory;
     let sorted_items_with_indices = sorted_items_with_indices(character_inventory);
@@ -454,7 +597,7 @@ pub async fn sell_two_cheapest_items(session: &mut SimpleSession, exclude_epics_
             continue;
         }
 
-        items_to_sell.push((pos, MainInventory));
+        items_to_sell.push((pos, item.command_ident(), item.typ, item.price));
 
         if items_to_sell.len() == 2
         {
@@ -462,13 +605,22 @@ pub async fn sell_two_cheapest_items(session: &mut SimpleSession, exclude_epics_
         }
     }
 
-    for (pos, _inventory_type) in items_to_sell
+    for (pos, item_ident, item_type, item_price) in items_to_sell
     {
         let sell_command = Command::SellShop {
             inventory: PlayerItemPlace::MainInventory,
             inventory_pos: pos,
+            item_ident,
         };
         session.send_command(sell_command).await?;
+        write_character_log(
+            &character_name,
+            character_id,
+            &format!(
+                "SELL: item typ={:?} price={} pos={}",
+                item_type, item_price, pos
+            ),
+        );
     }
 
     Ok(String::from("items have been sold"))
@@ -765,6 +917,8 @@ pub fn check_gems_in_equipment_and_decide_whether_to_sell(gs: &GameState, gem_va
 pub async fn brew_potions_using_pet_fruits(session: &mut SimpleSession) -> Result<String, Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let free_slot = gs.character.inventory.free_slot();
     if free_slot.is_none()
     {
@@ -796,17 +950,44 @@ pub async fn brew_potions_using_pet_fruits(session: &mut SimpleSession) -> Resul
 
             if let Some(bag_pos) = gs.character.inventory.free_slot()
             {
+                let updated_gs = session.send_command(Command::Update).await?;
+                let item_info = updated_gs
+                    .character
+                    .inventory
+                    .backpack
+                    .get(bag_pos.backpack_pos())
+                    .and_then(|slot| slot.as_ref())
+                    .map(|item| (item.command_ident(), item.typ, item.price));
+                let Some((item_ident, item_typ, item_price)) = item_info else
+                {
+                    eprintln!(
+                        "[ERROR] SellShop skipped, no item in slot {}",
+                        bag_pos.backpack_pos()
+                    );
+                    continue;
+                };
                 println!("{:?}", bag_pos);
                 if let Err(e) = session
                     .send_command(Command::SellShop {
                         inventory: PlayerItemPlace::MainInventory,
                         inventory_pos: bag_pos.backpack_pos(),
+                        item_ident,
                     })
                     .await
                 {
                     eprintln!("[ERROR] SellShop failed at pos {}: {}", bag_pos.backpack_pos(), e);
                     return Err(e.into());
                 }
+                write_character_log(
+                    &character_name,
+                    character_id,
+                    &format!(
+                        "SELL: brew_item typ={:?} price={} pos={}",
+                        item_typ,
+                        item_price,
+                        bag_pos.backpack_pos()
+                    ),
+                );
             }
 
             manage_inventory(session).await?;

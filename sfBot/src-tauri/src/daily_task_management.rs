@@ -105,6 +105,7 @@ pub async fn ensure_weapon_is_equipped_back(session: &mut SimpleSession, weapon_
                 from_pos: *pos,
                 to: ItemPlace::Equipment,
                 to_pos: 8,
+                item_ident: item.command_ident(),
             };
             session.send_command(equip_weapon).await?;
             return Ok(());
@@ -263,7 +264,8 @@ pub async fn bare_handed_attack_task(session: &mut SimpleSession) -> Result<Stri
     let mut result = String::from(", Bare handed attack (");
     let gs = session.send_command(Command::CheckArena).await?.clone();
     let free_slots = gs.character.inventory.count_free_slots();
-    let weapon_equipped = gs.character.equipment.0[EquipmentSlot::Weapon].is_some();
+    let weapon_item = gs.character.equipment.0[EquipmentSlot::Weapon].clone();
+    let weapon_equipped = weapon_item.is_some();
     if free_slots <= 0 && weapon_equipped
     {
         return Ok(String::from(""));
@@ -289,13 +291,14 @@ pub async fn bare_handed_attack_task(session: &mut SimpleSession) -> Result<Stri
             let final_place = ItemPlace::MainInventory;
 
             // Unequip weapon if needed
-            if weapon_equipped
+            if let Some(weapon_item) = &weapon_item
             {
                 let unequip_item = Command::ItemMove {
                     from: ItemPlace::Equipment,
                     from_pos: 8,
                     to: final_place,
                     to_pos: index,
+                    item_ident: weapon_item.command_ident(),
                 };
                 session.send_command(unequip_item).await?;
                 result += "unequipped weapon - ";
@@ -313,13 +316,14 @@ pub async fn bare_handed_attack_task(session: &mut SimpleSession) -> Result<Stri
                 session.send_command(fight_player).await?;
 
                 // Equip weapon back if needed
-                if weapon_equipped
+                if let Some(weapon_item) = &weapon_item
                 {
                     let equip_item = Command::ItemMove {
                         from: final_place,
                         from_pos: index,
                         to: ItemPlace::Equipment,
                         to_pos: 8,
+                        item_ident: weapon_item.command_ident(),
                     };
                     session.send_command(equip_item).await?;
                     result += "equipped weapon back on.)";
