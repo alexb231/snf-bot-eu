@@ -19,7 +19,6 @@ use crate::{
     bot_runner::write_character_log,
     equipment_swapping::check_and_swap_equipment,
     fetch_character_setting,
-    gem_stats::record_gem_stat,
     lottery::sleep_between_commands,
 };
 
@@ -341,11 +340,6 @@ pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>
     let gs = session.send_command(Command::Update).await?.clone();
     let character_name = gs.character.name.clone();
     let character_id = gs.character.player_id;
-    let server = session
-        .server_url()
-        .host_str()
-        .unwrap_or("unknown")
-        .to_ascii_lowercase();
     let char_inventory = &gs.character.inventory.clone();
 
     let sorted_items_with_indices = sorted_items_with_indices(char_inventory);
@@ -380,13 +374,6 @@ pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>
                     "SELL: gem typ={:?} value={} pos={}",
                     gem.typ, gem.value, pos
                 ),
-            );
-            record_gem_stat(
-                &character_name,
-                character_id,
-                &server,
-                gem.typ,
-                gem.value,
             );
         }
     }
