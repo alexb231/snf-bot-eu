@@ -16,6 +16,7 @@ use sf_api::{
 };
 
 use crate::{
+    bot_runner::write_character_log,
     equipment_swapping::check_and_swap_equipment,
     fetch_character_setting,
     lottery::sleep_between_commands,
@@ -138,6 +139,8 @@ pub async fn check_whether_hourglas_is_in_inv(session: &mut SimpleSession) -> Re
 pub async fn drink_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let character_pots = &gs.character.active_potions;
     let amount_of_active_potions = character_pots.iter().filter(|p| p.is_some()).count();
     let all_pots_are_none = character_pots.iter().all(|p| p.is_none());
@@ -173,6 +176,17 @@ pub async fn drink_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Er
                     eprintln!("Error: func drink_potions while executing UsePotion command: {}", err);
                     return Ok(());
                 }
+                if let ItemType::Potion(potion) = item_type
+                {
+                    write_character_log(
+                        &character_name,
+                        character_id,
+                        &format!(
+                            "POTION: drank typ={:?} size={:?} pos={}",
+                            potion.typ, potion.size, pos
+                        ),
+                    );
+                }
             }
         }
         else
@@ -189,6 +203,14 @@ pub async fn drink_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Er
                             {
                                 let drink_potion_command = Command::UsePotion { from: MainInventory, from_pos: *pos };
                                 session.send_command(drink_potion_command).await?;
+                                write_character_log(
+                                    &character_name,
+                                    character_id,
+                                    &format!(
+                                        "POTION: drank typ={:?} size={:?} pos={}",
+                                        potion.typ, potion.size, pos
+                                    ),
+                                );
                             }
                         }
                     }
@@ -248,6 +270,8 @@ pub async fn check_for_pet_egg(session: &mut SimpleSession) -> Result<std::strin
 pub async fn sell_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let char_inventory = &gs.character.inventory.clone();
     let sorted_items_with_indices = sorted_items_with_indices(char_inventory);
 
@@ -272,6 +296,17 @@ pub async fn sell_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Err
             inventory_pos: pos,
         };
         session.send_command(sell_command).await?;
+        if let ItemType::Potion(potion) = item_type
+        {
+            write_character_log(
+                &character_name,
+                character_id,
+                &format!(
+                    "SELL: potion typ={:?} size={:?} pos={}",
+                    potion.typ, potion.size, pos
+                ),
+            );
+        }
     }
 
     return Ok(());
@@ -280,6 +315,8 @@ pub async fn sell_potions(session: &mut SimpleSession) -> Result<(), Box<dyn Err
 pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?.clone();
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     let char_inventory = &gs.character.inventory.clone();
 
     let sorted_items_with_indices = sorted_items_with_indices(char_inventory);
@@ -304,6 +341,17 @@ pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>
             inventory_pos: pos,
         };
         session.send_command(sell_command).await?;
+        if let ItemType::Gem(gem) = item_type
+        {
+            write_character_log(
+                &character_name,
+                character_id,
+                &format!(
+                    "SELL: gem typ={:?} value={} pos={}",
+                    gem.typ, gem.value, pos
+                ),
+            );
+        }
     }
 
     return Ok(());
@@ -312,6 +360,8 @@ pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>
 pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active: bool, exclude_epics_from_witch_selling: bool) -> Result<(), Box<dyn Error>>
 {
     let gs = session.send_command(Command::Update).await?;
+    let character_name = gs.character.name.clone();
+    let character_id = gs.character.player_id;
     if gs.character.level < 66
     {
         return Ok(());
@@ -345,6 +395,17 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
                     };
 
                     session.send_command(drop_command).await?;
+                    if let Some(item) = inventory.backpack.get(pos).and_then(|slot| slot.as_ref())
+                    {
+                        write_character_log(
+                            &character_name,
+                            character_id,
+                            &format!(
+                                "WITCH: dropped pos={} item={:?} price={}",
+                                pos, item.typ, item.price
+                            ),
+                        );
+                    }
                 }
                 return Ok(());
             }
@@ -359,6 +420,17 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
                         position: pos,
                     };
                     session.send_command(drop_command).await?;
+                    if let Some(item) = inventory.backpack.get(pos).and_then(|slot| slot.as_ref())
+                    {
+                        write_character_log(
+                            &character_name,
+                            character_id,
+                            &format!(
+                                "WITCH: dropped pos={} item={:?} price={}",
+                                pos, item.typ, item.price
+                            ),
+                        );
+                    }
                 }
                 return Ok(());
             }
@@ -373,6 +445,14 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
                 };
 
                 session.send_command(drop_command).await?;
+                write_character_log(
+                    &character_name,
+                    character_id,
+                    &format!(
+                        "WITCH: dropped pos={} item={:?} price={}",
+                        pos, item.typ, item.price
+                    ),
+                );
                 return Ok(());
             }
             else
@@ -454,7 +534,7 @@ pub async fn sell_two_cheapest_items(session: &mut SimpleSession, exclude_epics_
             continue;
         }
 
-        items_to_sell.push((pos, MainInventory));
+        items_to_sell.push((pos, item.typ.clone(), item.price));
 
         if items_to_sell.len() == 2
         {
@@ -462,13 +542,21 @@ pub async fn sell_two_cheapest_items(session: &mut SimpleSession, exclude_epics_
         }
     }
 
-    for (pos, _inventory_type) in items_to_sell
+    for (pos, item_type, item_price) in items_to_sell
     {
         let sell_command = Command::SellShop {
             inventory: PlayerItemPlace::MainInventory,
             inventory_pos: pos,
         };
         session.send_command(sell_command).await?;
+        write_character_log(
+            &gs.character.name,
+            gs.character.player_id,
+            &format!(
+                "SELL: item typ={:?} price={} pos={}",
+                item_type, item_price, pos
+            ),
+        );
     }
 
     Ok(String::from("items have been sold"))
