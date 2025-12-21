@@ -262,10 +262,6 @@ pub enum Command {
         inventory: PlayerItemPlace,
         /// The position in the chosen inventory you
         inventory_pos: usize,
-        /// Identifies the source item to make sure it has not changed since
-        /// you looked at it (shop reroll, etc.). You can get this ident by
-        /// calling `.command_ident()` on any Item
-        item_ident: ItemCommandIdent,
     },
     BuyShopHourglas {
         /// The shop you want to buy from
@@ -295,10 +291,6 @@ pub enum Command {
         inventory_to: PlayerItemPlace,
         /// The inventory you move the item from
         inventory_to_pos: usize,
-        /// Identifies the source item to make sure it has not changed since
-        /// you looked at it (shop reroll, etc.). You can get this ident by
-        /// calling `.command_ident()` on any Item
-        item_ident: ItemCommandIdent,
     },
     /// Allows moving items from any position to any other position items can
     /// be at. You should make sure, that the move makes sense (do not move
@@ -312,10 +304,6 @@ pub enum Command {
         to: ItemPlace,
         /// The position of the item you want to move
         to_pos: usize,
-        /// Identifies the source item to make sure it has not changed since
-        /// you looked at it (shop reroll, etc.). You can get this ident by
-        /// calling `.command_ident()` on any Item
-        item_ident: ItemCommandIdent,
     },
     /// Allows using an potion from any position
     UsePotion {
@@ -323,10 +311,6 @@ pub enum Command {
         from: ItemPlace,
         /// The position of the potion you want to use
         from_pos: usize,
-        /// Identifies the source item to make sure it has not changed since
-        /// you looked at it (shop reroll, etc.). You can get this ident by
-        /// calling `.command_ident()` on any Item
-        item_ident: ItemCommandIdent,
     },
     /// Opens the message at the specified index [0-100]
     MessageOpen {
@@ -407,9 +391,6 @@ pub enum Command {
         /// The emblem you want to set
         emblem: Emblem,
     },
-    BrewPotion {
-        fruit_type: HabitatType,
-    },
     /// Gambles the desired amount of silver. Picking the right thing is not
     /// actually required. That just masks the determined result. The result
     /// will be in `gamble_result` on `Tavern`
@@ -458,10 +439,6 @@ pub enum Command {
         position: u8,
         /// The action you want to use on the item
         action: BlacksmithAction,
-        /// Identifies the source item to make sure it has not changed since
-        /// you looked at it (shop reroll, etc.). You can get this ident by
-        /// calling `.command_ident()` on any Item
-        item_ident: ItemCommandIdent,
     },
     /// Sends the specified message in the guild chat
     GuildSendChat {
@@ -500,10 +477,6 @@ pub enum Command {
         to_companion: CompanionClass,
         /// The slot of the companion you want to equip
         to_slot: EquipmentSlot,
-        /// Identifies the source item to make sure it has not changed since
-        /// you looked at it (shop reroll, etc.). You can get this ident by
-        /// calling `.command_ident()` on any Item
-        item_ident: ItemCommandIdent,
     },
     /// Collects a specific resource from the fortress
     FortressGather {
@@ -1441,9 +1414,6 @@ impl Command {
                 habitat: element,
             } => {
                 format!("PetsPvPFight:0/{opponent_id}/{}", *element as u32 + 1)
-            }
-            Command::BrewPotion { fruit_type } => {
-                format!("PlayerWitchBrewPotion:{}", *fruit_type as u8)
             }
             Command::FightPetDungeon {
                 use_mush,
