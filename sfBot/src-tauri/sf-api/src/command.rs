@@ -276,10 +276,6 @@ pub enum Command {
         inventory: PlayerItemPlace,
         /// The position of the item you want to sell
         inventory_pos: usize,
-        /// Identifies the source item to make sure it has not changed since
-        /// you looked at it (shop reroll, etc.). You can get this ident by
-        /// calling `.command_ident()` on any Item
-        item_ident: ItemCommandIdent,
     },
     /// Moves an item from one inventory position to another
     InventoryMove {
@@ -1049,9 +1045,8 @@ impl Command {
                 shop_pos,
                 inventory,
                 inventory_pos,
-                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
+                "PlayerItemMove:{}/{}/{}/{}",
                 *shop_type as usize,
                 *shop_pos + 1,
                 *inventory as usize,
@@ -1068,7 +1063,6 @@ impl Command {
             Command::SellShop {
                 inventory,
                 inventory_pos,
-                item_ident,
             } => {
                 let mut rng = fastrand::Rng::new();
                 let shop = if rng.bool() {
@@ -1078,7 +1072,7 @@ impl Command {
                 };
                 let shop_pos = rng.u32(0..6);
                 format!(
-                    "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
+                    "PlayerItemMove:{}/{}/{}/{}",
                     *inventory as usize,
                     *inventory_pos + 1,
                     shop as usize,
@@ -1090,9 +1084,8 @@ impl Command {
                 inventory_from_pos,
                 inventory_to,
                 inventory_to_pos,
-                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
+                "PlayerItemMove:{}/{}/{}/{}",
                 *inventory_from as usize,
                 *inventory_from_pos + 1,
                 *inventory_to as usize,
@@ -1103,21 +1096,16 @@ impl Command {
                 from_pos,
                 to,
                 to_pos,
-                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
+                "PlayerItemMove:{}/{}/{}/{}",
                 *from as usize,
                 *from_pos + 1,
                 *to as usize,
                 *to_pos + 1
             ),
-            Command::UsePotion {
-                from,
-                from_pos,
-                item_ident,
-            } => {
+            Command::UsePotion { from, from_pos } => {
                 format!(
-                    "PlayerItemMove:{}/{}/1/0/{item_ident}",
+                    "PlayerItemMove:{}/{}/1/0/",
                     *from as usize,
                     *from_pos + 1
                 )
@@ -1161,9 +1149,8 @@ impl Command {
                 inventory_t,
                 position,
                 action,
-                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/-1/{item_ident}",
+                "PlayerItemMove:{}/{}/{}/-1",
                 *inventory_t as usize,
                 position + 1,
                 *action as usize
@@ -1187,9 +1174,8 @@ impl Command {
                 from_pos,
                 to_slot,
                 to_companion,
-                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
+                "PlayerItemMove:{}/{}/{}/{}",
                 *from_inventory as usize,
                 *from_pos,
                 *to_companion as u8 + 101,

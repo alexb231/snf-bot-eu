@@ -418,7 +418,6 @@ pub async fn check_and_swap_equipment(session: &mut SimpleSession) -> Result<Str
                 inventory_from_pos: from_pos,
                 inventory_to: PlayerItemPlace::Equipment,
                 inventory_to_pos: equipment_slot_index(slot),
-                item_ident: candidate.command_ident(),
             })
             .await?;
 
