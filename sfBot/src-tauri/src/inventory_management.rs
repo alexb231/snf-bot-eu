@@ -359,7 +359,7 @@ pub async fn sell_gems(session: &mut SimpleSession) -> Result<(), Box<dyn Error>
 
 pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active: bool, exclude_epics_from_witch_selling: bool) -> Result<(), Box<dyn Error>>
 {
-    let gs = session.send_command(Command::Update).await?;
+    let gs = session.send_command(Command::Update).await?.clone();
     let character_name = gs.character.name.clone();
     let character_id = gs.character.player_id;
     if gs.character.level < 66
@@ -369,7 +369,7 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
 
     loop
     {
-        let gs = session.send_command(Command::Update).await?;
+        let gs = session.send_command(Command::Update).await?.clone();
         let inventory = &gs.character.inventory;
 
         let the_witch = match &gs.witch
@@ -389,20 +389,25 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
                 let items_to_sell = collect_items_to_sell_no_epics_no_legendary(inventory);
                 for (pos) in items_to_sell
                 {
+                    let item_info = inventory
+                        .backpack
+                        .get(pos)
+                        .and_then(|slot| slot.as_ref())
+                        .map(|item| (item.typ.clone(), item.price));
                     let drop_command = Command::WitchDropCauldron {
                         inventory_t: PlayerItemPlace::MainInventory,
                         position: pos,
                     };
 
                     session.send_command(drop_command).await?;
-                    if let Some(item) = inventory.backpack.get(pos).and_then(|slot| slot.as_ref())
+                    if let Some((item_typ, item_price)) = item_info
                     {
                         write_character_log(
                             &character_name,
                             character_id,
                             &format!(
                                 "WITCH: dropped pos={} item={:?} price={}",
-                                pos, item.typ, item.price
+                                pos, item_typ, item_price
                             ),
                         );
                     }
@@ -415,19 +420,24 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
                 let items_to_sell = collect_items_to_sell_including_epics_and_legendaries(inventory);
                 for (pos) in items_to_sell
                 {
+                    let item_info = inventory
+                        .backpack
+                        .get(pos)
+                        .and_then(|slot| slot.as_ref())
+                        .map(|item| (item.typ.clone(), item.price));
                     let drop_command = Command::WitchDropCauldron {
                         inventory_t: PlayerItemPlace::MainInventory,
                         position: pos,
                     };
                     session.send_command(drop_command).await?;
-                    if let Some(item) = inventory.backpack.get(pos).and_then(|slot| slot.as_ref())
+                    if let Some((item_typ, item_price)) = item_info
                     {
                         write_character_log(
                             &character_name,
                             character_id,
                             &format!(
                                 "WITCH: dropped pos={} item={:?} price={}",
-                                pos, item.typ, item.price
+                                pos, item_typ, item_price
                             ),
                         );
                     }
@@ -439,6 +449,8 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
         {
             if let Some((pos, item)) = find_required_item_for_witch(inventory, required_slot, exclude_epics_from_witch_selling)
             {
+                let item_typ = item.typ.clone();
+                let item_price = item.price;
                 let drop_command = Command::WitchDropCauldron {
                     inventory_t: PlayerItemPlace::MainInventory,
                     position: pos,
@@ -450,7 +462,7 @@ pub async fn sell_item_to_witch(session: &mut SimpleSession, witch_event_active:
                     character_id,
                     &format!(
                         "WITCH: dropped pos={} item={:?} price={}",
-                        pos, item.typ, item.price
+                        pos, item_typ, item_price
                     ),
                 );
                 return Ok(());
