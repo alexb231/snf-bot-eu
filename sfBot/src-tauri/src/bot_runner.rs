@@ -260,7 +260,7 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_city_guard", 300);
     cooldowns.insert("cmd_upgrade_skill_points", 15 * 60_000);
     cooldowns.insert("cmd_collect_daily_and_weekly_rewards", 60 * 60_000);
-    cooldowns.insert("cmd_play_dice", 60_000);
+    cooldowns.insert("cmd_play_dice", 2 * 60_000);
     cooldowns.insert("cmd_accept_unlockables", 5 * 60_000);
     cooldowns.insert("cmd_play_idle_game", 60_000);
     cooldowns.insert("cmd_collect_fortress_resources", 30 * 60_000);
@@ -275,7 +275,7 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_start_searching_for_gem", 3 * 60_000);
     cooldowns.insert("cmd_attack_fortress", 3 * 60_000);
     cooldowns.insert("cmd_train_fortress_units", 5 * 60_000);
-    cooldowns.insert("cmd_perform_underworld_atk_suggested_enemy", 60_000);
+    cooldowns.insert("cmd_perform_underworld_atk_suggested_enemy",5 * 60_000);
     cooldowns.insert("cmd_collect_underworld_resources", 30 * 60_000);
     cooldowns.insert("cmd_build_underworld_perfect_order", 5 * 60_000);
     cooldowns.insert("cmd_fight_pet_arena", 15 * 60_000);
