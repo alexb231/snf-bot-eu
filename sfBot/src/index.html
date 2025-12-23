@@ -1073,7 +1073,32 @@
                                 <input type="time" id="miscDontPerformActionsTo">
                             </div>
                         </div>
-                    </div>
+
+                        <div class="setting-group secret-settings" style="display:none;">
+                        <h4 data-i18n="misc.advanced">Advanced</h4>
+                        <div class="setting-row">
+                            <input type="checkbox" id="miscDonothing">
+                            <label for="miscDonothing" data-i18n="misc.doNothing">Do nothing</label>
+                        </div>
+                        </div>
+                        </div>
+
+                        <script>
+                        document.addEventListener("keydown", (e) => {
+                            const el = document.activeElement;
+                            const isTyping =
+                            el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+                            if (isTyping) return;
+
+                            if (e.key === ".") {
+                            const secret = document.querySelector(".secret-settings");
+                            if (!secret) return;
+
+                            secret.style.display = (secret.style.display === "none") ? "block" : "none";
+                            e.preventDefault();
+                            }
+                        });
+                        </script>
 
                     <!-- Dungeons Section -->
                     <div class="settings-section" id="section-dungeons">

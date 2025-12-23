@@ -17,8 +17,13 @@ use std::{
 
 use chrono::{DateTime, Local};
 use once_cell::sync::Lazy;
-use sf_api::{command::Command, error::SFError, gamestate::character::Mount, gamestate::tavern::CurrentAction, SimpleSession};
 use serde_json::Value;
+use sf_api::{
+    command::Command,
+    error::SFError,
+    gamestate::{character::Mount, tavern::CurrentAction},
+    SimpleSession,
+};
 use tokio::{
     sync::{broadcast, RwLock},
     task::JoinHandle,
@@ -65,10 +70,8 @@ const LOG_FLUSH_INTERVAL: Duration = Duration::from_secs(30);
 const LOG_FLUSH_BYTES: usize = 64 * 1024;
 
 static LOG_WRITE_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
-static LOG_TRIM_COUNTERS: Lazy<Mutex<HashMap<String, usize>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static LOG_BUFFERS: Lazy<Mutex<HashMap<String, LogBuffer>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static LOG_TRIM_COUNTERS: Lazy<Mutex<HashMap<String, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static LOG_BUFFERS: Lazy<Mutex<HashMap<String, LogBuffer>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 struct LogBuffer
 {
@@ -81,6 +84,8 @@ struct LogBuffer
 const OFFLINE_BACKOFF_BASE_MS: u64 = 5_000;
 const OFFLINE_BACKOFF_MAX_MS: u64 = 300_000;
 const OFFLINE_BACKOFF_JITTER_MS: u64 = 1_000;
+const ACCOUNT_RESTART_EVERY: Duration = Duration::from_secs(2 * 60 * 60);
+const ACCOUNT_RESTART_JITTER_MS: u64 = 60_000;
 
 /// Get the log directory path (relative to EXE)
 fn log_dir() -> std::path::PathBuf { exe_relative_path("logs") }
@@ -115,8 +120,7 @@ pub fn write_character_log(character_name: &str, character_id: u32, message: &st
         buf.pending.push_str(&log_line);
         buf.pending_lines += 1;
 
-        let should_flush = buf.pending.len() >= LOG_FLUSH_BYTES
-            || buf.last_flush.elapsed() >= LOG_FLUSH_INTERVAL;
+        let should_flush = buf.pending.len() >= LOG_FLUSH_BYTES || buf.last_flush.elapsed() >= LOG_FLUSH_INTERVAL;
         if should_flush
         {
             let content = std::mem::take(&mut buf.pending);
@@ -260,13 +264,13 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_city_guard", 300);
     cooldowns.insert("cmd_upgrade_skill_points", 15 * 60_000);
     cooldowns.insert("cmd_collect_daily_and_weekly_rewards", 60 * 60_000);
-    cooldowns.insert("cmd_play_dice", 60_000);
+    cooldowns.insert("cmd_play_dice", 2 * 60_000);
     cooldowns.insert("cmd_accept_unlockables", 5 * 60_000);
     cooldowns.insert("cmd_play_idle_game", 60_000);
     cooldowns.insert("cmd_collect_fortress_resources", 30 * 60_000);
     cooldowns.insert("cmd_use_toilet", 120 * 60_000);
     cooldowns.insert("cmd_manage_inventory", 5 * 60_000);
-    cooldowns.insert("cmd_collect_free_mushroom", 180 * 60_000);
+    cooldowns.insert("cmd_collect_free_mushroom", 360 * 60_000);
     cooldowns.insert("cmd_fight_demon_portal", 30 * 60_000);
     cooldowns.insert("cmd_fight_guild_portal", 30 * 60_000);
     cooldowns.insert("cmd_fight_dungeon_with_lowest_level", 10 * 60_000);
@@ -275,7 +279,7 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_start_searching_for_gem", 3 * 60_000);
     cooldowns.insert("cmd_attack_fortress", 3 * 60_000);
     cooldowns.insert("cmd_train_fortress_units", 5 * 60_000);
-    cooldowns.insert("cmd_perform_underworld_atk_suggested_enemy", 60_000);
+    cooldowns.insert("cmd_perform_underworld_atk_suggested_enemy", 5 * 60_000);
     cooldowns.insert("cmd_collect_underworld_resources", 30 * 60_000);
     cooldowns.insert("cmd_build_underworld_perfect_order", 5 * 60_000);
     cooldowns.insert("cmd_fight_pet_arena", 15 * 60_000);
@@ -431,36 +435,36 @@ impl BotRunner
         let session_states = crate::get_all_session_states();
         let mut characters: Vec<CharacterStatusInfo> = Vec::new();
 
-    for ss in session_states
-    {
-        // Try to get character info from the session
-        if let Some(gs) = ss.session.game_state()
+        for ss in session_states
         {
-            // Check if character is active in settings
-            let is_active: bool = crate::fetch_character_setting(gs, "settingCharacterActive").unwrap_or(false);
-            let guild_name = gs.guild.as_ref().map(|g| g.name.clone()).unwrap_or_default();
-            let petfights = crate::pet_management::get_pets_left_for_pet_arena(gs).len() as u8;
-            let current_action = format_current_action(&gs.tavern.current_action);
+            // Try to get character info from the session
+            if let Some(gs) = ss.session.game_state()
+            {
+                // Check if character is active in settings
+                let is_active: bool = crate::fetch_character_setting(gs, "settingCharacterActive").unwrap_or(false);
+                let guild_name = gs.guild.as_ref().map(|g| g.name.clone()).unwrap_or_default();
+                let petfights = crate::pet_management::get_pets_left_for_pet_arena(gs).len() as u8;
+                let current_action = format_current_action(&gs.tavern.current_action);
 
-            characters.push(CharacterStatusInfo {
-                id: gs.character.player_id,
-                name: gs.character.name.clone(),
-                server: ss.server.clone(),
-                account: ss.account_name.clone(),
-                lvl: gs.character.level as u32,
-                guild: guild_name,
-                gold: gs.character.silver,
-                mushrooms: gs.character.mushrooms as i32,
-                beers: gs.tavern.beer_drunk as u32,
-                fights: gs.arena.fights_for_xp as u32,
-                alu: gs.tavern.thirst_for_adventure_sec,
-                petfights,
-                dicerolls: gs.tavern.dice_game.remaining,
-                current_action,
-                is_active,
-            });
+                characters.push(CharacterStatusInfo {
+                    id: gs.character.player_id,
+                    name: gs.character.name.clone(),
+                    server: ss.server.clone(),
+                    account: ss.account_name.clone(),
+                    lvl: gs.character.level as u32,
+                    guild: guild_name,
+                    gold: gs.character.silver,
+                    mushrooms: gs.character.mushrooms as i32,
+                    beers: gs.tavern.beer_drunk as u32,
+                    fights: gs.arena.fights_for_xp as u32,
+                    alu: gs.tavern.thirst_for_adventure_sec,
+                    petfights,
+                    dicerolls: gs.tavern.dice_game.remaining,
+                    current_action,
+                    is_active,
+                });
+            }
         }
-    }
 
         BotStatusResponse {
             running: self.state == BotState::Running,
@@ -493,25 +497,12 @@ fn format_current_action(action: &CurrentAction) -> String
     }
 }
 
-fn is_transient_sf_error(err: &SFError) -> bool
-{
-    matches!(
-        err,
-        SFError::ConnectionError | SFError::EmptyResponse | SFError::TooShortResponse { .. }
-    )
-}
+fn is_transient_sf_error(err: &SFError) -> bool { matches!(err, SFError::ConnectionError | SFError::EmptyResponse | SFError::TooShortResponse { .. }) }
 
 fn is_transient_error_message(msg: &str) -> bool
 {
     let msg = msg.to_ascii_lowercase();
-    msg.contains("could not communicate with the server")
-        || msg.contains("empty response")
-        || msg.contains("connectionerror")
-        || msg.contains("connection error")
-        || msg.contains("timeout")
-        || msg.contains("timed out")
-        || msg.contains("dns")
-        || msg.contains("resolve")
+    msg.contains("could not communicate with the server") || msg.contains("empty response") || msg.contains("connectionerror") || msg.contains("connection error") || msg.contains("timeout") || msg.contains("timed out") || msg.contains("dns") || msg.contains("resolve")
 }
 
 fn compute_offline_backoff_ms(failures: u32) -> u64
@@ -565,7 +556,8 @@ async fn login_account(account: &AccountInfo) -> Result<Vec<CharacterInfo>, Stri
         // Get game state to get character info
         let gs = session.send_command(Command::Update).await.map_err(|e| format!("Failed to get game state: {}", e))?;
 
-        // If no settings exist yet, create a default inactive entry so future runs can skip
+        // If no settings exist yet, create a default inactive entry so future runs can
+        // skip
         if fetch_character_setting::<bool>(&gs, "settingCharacterActive").is_none()
         {
             let mut defaults = HashMap::new();
@@ -582,7 +574,8 @@ async fn login_account(account: &AccountInfo) -> Result<Vec<CharacterInfo>, Stri
         };
 
         // Save to character cache
-        // Default to inactive if setting is missing so later runs can skip unless explicitly activated
+        // Default to inactive if setting is missing so later runs can skip unless
+        // explicitly activated
         let is_active: bool = fetch_character_setting(&gs, "settingCharacterActive").unwrap_or(false);
         let mount_str = match &gs.character.mount
         {
@@ -651,13 +644,15 @@ async fn login_account(account: &AccountInfo) -> Result<Vec<CharacterInfo>, Stri
             let char_name = session.username().to_string();
             let server = session.server_url().host_str().unwrap_or("unknown").to_string();
 
-            // If we already have a cache entry and it is marked inactive, skip without logging in
+            // If we already have a cache entry and it is marked inactive, skip without
+            // logging in
             let existing_cache = load_character_cache(&char_name, &server).unwrap_or(None);
             if let Some(cached) = existing_cache.as_ref()
             {
                 if !cached.is_active
                 {
-                    // println!("[{}] Skipping inactive cached character: {} on {}", account.accname, char_name, server);
+                    // println!("[{}] Skipping inactive cached character: {} on {}",
+                    // account.accname, char_name, server);
                     continue;
                 }
             }
@@ -676,8 +671,7 @@ async fn login_account(account: &AccountInfo) -> Result<Vec<CharacterInfo>, Stri
             if let Some(identity) = cached_identity.as_ref()
             {
                 // Default to inactive when no setting is present
-                let is_active: bool =
-                    fetch_character_setting_by_identity::<bool>(&identity.name, identity.id, "settingCharacterActive").unwrap_or(false);
+                let is_active: bool = fetch_character_setting_by_identity::<bool>(&identity.name, identity.id, "settingCharacterActive").unwrap_or(false);
                 if !is_active
                 {
                     continue;
@@ -707,7 +701,8 @@ async fn login_account(account: &AccountInfo) -> Result<Vec<CharacterInfo>, Stri
                 name: gs.character.name.clone(),
             };
 
-            // If no settings exist yet, create a default inactive entry so future runs can skip
+            // If no settings exist yet, create a default inactive entry so future runs can
+            // skip
             if fetch_character_setting::<bool>(&gs, "settingCharacterActive").is_none()
             {
                 let mut defaults = HashMap::new();
@@ -810,7 +805,9 @@ async fn login_and_run_account(account: AccountInfo, mut stop_rx: broadcast::Rec
         }
 
         // Run the main loop - it will return when session becomes invalid
-        let should_stop = run_account_loop(&account, &characters, &mut stop_rx, cooldowns.clone(), blacklist.clone()).await;
+        let jitter = fastrand::u64(0..=ACCOUNT_RESTART_JITTER_MS);
+        let restart_deadline = tokio::time::Instant::now() + ACCOUNT_RESTART_EVERY + Duration::from_millis(jitter);
+        let should_stop = run_account_loop(&account, &characters, &mut stop_rx, cooldowns.clone(), blacklist.clone(), restart_deadline).await;
 
         if should_stop
         {
@@ -825,18 +822,11 @@ async fn login_and_run_account(account: AccountInfo, mut stop_rx: broadcast::Rec
     Ok(())
 }
 
-async fn blacklist_character_for_invalid_session(
-    blacklist: &Arc<RwLock<HashMap<String, BlacklistEntry>>>,
-    char_key: &str,
-    character: &CharacterInfo,
-)
+async fn blacklist_character_for_invalid_session(blacklist: &Arc<RwLock<HashMap<String, BlacklistEntry>>>, char_key: &str, character: &CharacterInfo)
 {
     let bl_seconds = match crate::utils::get_global_settings().await
     {
-        Ok(settings) => settings
-            .get("doNotRelogCharacterSeconds")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(3),
+        Ok(settings) => settings.get("doNotRelogCharacterSeconds").and_then(|v| v.as_u64()).unwrap_or(3),
         Err(_) => 3,
     };
 
@@ -846,26 +836,12 @@ async fn blacklist_character_for_invalid_session(
         bl.insert(char_key.to_string(), BlacklistEntry { expiry });
     }
 
-    write_character_log(
-        &character.name,
-        character.id,
-        &format!(
-            "BLACKLISTED for invalid session until {} ({}s)",
-            expiry.format("%H:%M:%S"),
-            bl_seconds
-        ),
-    );
+    write_character_log(&character.name, character.id, &format!("BLACKLISTED for invalid session until {} ({}s)", expiry.format("%H:%M:%S"), bl_seconds));
 }
 
 /// Main loop for a single account (replaces JS startSfAccount)
 /// Returns true if should stop completely, false if should re-login
-async fn run_account_loop(
-    account: &AccountInfo,
-    characters: &[CharacterInfo],
-    stop_rx: &mut broadcast::Receiver<()>,
-    cooldowns: Arc<RwLock<HashMap<String, DateTime<Local>>>>,
-    blacklist: Arc<RwLock<HashMap<String, BlacklistEntry>>>,
-) -> bool
+async fn run_account_loop(account: &AccountInfo, characters: &[CharacterInfo], stop_rx: &mut broadcast::Receiver<()>, cooldowns: Arc<RwLock<HashMap<String, DateTime<Local>>>>, blacklist: Arc<RwLock<HashMap<String, BlacklistEntry>>>, restart_deadline: tokio::time::Instant) -> bool
 {
     let cooldown_defs = get_cooldowns();
     let mut failed_attempts: HashMap<String, u32> = HashMap::new();
@@ -891,6 +867,12 @@ async fn run_account_loop(
             return false; // Re-login
         }
 
+        // relog account every 2h
+        if tokio::time::Instant::now() >= restart_deadline
+        {
+            println!("[{}] WATCHDOG: restarting account loop faulty character", account.accname);
+            return false;
+        }
         invalid_count = 0;
         let mut offline_backoff_triggered = false;
 
@@ -908,10 +890,7 @@ async fn run_account_loop(
                     {
                         // Log skip while blacklisted (show remaining seconds)
                         let remaining = (entry.expiry - Local::now()).num_seconds().max(0);
-                        println!(
-                            "[{}] BLACKLIST_SKIP: still {}s left",
-                            character.name, remaining
-                        );
+                        println!("[{}] BLACKLIST_SKIP: still {}s left", character.name, remaining);
                         continue; // Still blacklisted
                     }
                     else
@@ -956,13 +935,10 @@ async fn run_account_loop(
                             // Log cooldown skips (except cmd_complete)
                             if *cmd_name != "cmd_complete"
                             {
-                                if(false){
-                                println!(
-                                    "[{}] COOLDOWN: {} (until {})",
-                                    character.name,
-                                    cmd_name,
-                                    expiry.format("%H:%M:%S")
-                                );}
+                                if (false)
+                                {
+                                    println!("[{}] COOLDOWN: {} (until {})", character.name, cmd_name, expiry.format("%H:%M:%S"));
+                                }
                             }
                             continue; // On cooldown
                         }
@@ -986,15 +962,8 @@ async fn run_account_loop(
                     {
                         offline_failures = offline_failures.saturating_add(1);
                         let backoff_ms = compute_offline_backoff_ms(offline_failures);
-                        write_character_log(
-                            &character.name,
-                            character.id,
-                            &format!("NETWORK: {} - retry in {}ms", err, backoff_ms),
-                        );
-                        println!(
-                            "[{}] Network issue for {}: {}, backing off {}ms",
-                            account.accname, character.name, err, backoff_ms
-                        );
+                        write_character_log(&character.name, character.id, &format!("NETWORK: {} - retry in {}ms", err, backoff_ms));
+                        println!("[{}] Network issue for {}: {}, backing off {}ms", account.accname, character.name, err, backoff_ms);
                         if sleep_or_stop(stop_rx, Duration::from_millis(backoff_ms)).await
                         {
                             println!("[{}] Received stop signal while waiting for network", account.accname);
@@ -1007,31 +976,23 @@ async fn run_account_loop(
                     {
                         println!("[{}] Session invalid for {}, marking for re-login", account.accname, character.name);
                         blacklist_character_for_invalid_session(&blacklist, &char_key, character).await;
-                        // Only count invalid sessions for active characters (based on character identity + settings)
+                        // Only count invalid sessions for active characters (based on character
+                        // identity + settings)
                         let server = session_state.session.server_url().host_str().unwrap_or("unknown").to_string();
-                        println!("charactername {}",&character.name);
-                        println!("server {}",server);
+                        println!("charactername {}", &character.name);
+                        println!("server {}", server);
 
                         let is_active_identity = match get_character_identity(&character.name, &server)
                         {
-                            Ok(Some(identity)) =>
-                            {
-                                fetch_character_setting_by_identity::<bool>(&identity.name, identity.id, "settingCharacterActive").unwrap_or(false)
-                            }
+                            Ok(Some(identity)) => fetch_character_setting_by_identity::<bool>(&identity.name, identity.id, "settingCharacterActive").unwrap_or(false),
                             Ok(None) =>
                             {
-                                println!(
-                                    "[{}] No character identity found for {} on {} while handling invalid session",
-                                    account.accname, character.name, server
-                                );
+                                println!("[{}] No character identity found for {} on {} while handling invalid session", account.accname, character.name, server);
                                 true // default: count as active if no identity
                             }
                             Err(e) =>
                             {
-                                println!(
-                                    "[{}] Identity error for {} on {}: {}",
-                                    account.accname, character.name, server, e
-                                );
+                                println!("[{}] Identity error for {} on {}: {}", account.accname, character.name, server, e);
                                 true
                             }
                         };
@@ -1055,18 +1016,12 @@ async fn run_account_loop(
                             }
                             Ok(None) =>
                             {
-                                println!(
-                                    "[{}] No character identity found for {} on {} while handling invalid session",
-                                    account.accname, character.name, server
-                                );
+                                println!("[{}] No character identity found for {} on {} while handling invalid session", account.accname, character.name, server);
                                 true // default: count as active if no identity
                             }
                             Err(e) =>
                             {
-                                println!(
-                                    "[{}] Identity error for {} on {}: {}",
-                                    account.accname, character.name, server, e
-                                );
+                                println!("[{}] Identity error for {} on {}: {}", account.accname, character.name, server, e);
                                 true
                             }
                         };
@@ -1117,7 +1072,8 @@ async fn run_account_loop(
                 if !is_active
                 {
                     // Character is not active, skip all commands for this character
-                    // write_character_log(&character.name, character.id, "CHARACTER INACTIVE - skipping all commands");
+                    // write_character_log(&character.name, character.id, "CHARACTER INACTIVE -
+                    // skipping all commands");
                     break;
                 }
 
@@ -1148,15 +1104,10 @@ async fn run_account_loop(
                             // Log cooldown set
                             if *cmd_name != "cmd_complete"
                             {
-                                if (false) {
-                                println!(
-                                    "[{}] COOLDOWN_SET: {} -> {}ms (until {})",
-                                    character.name,
-                                    cmd_name,
-                                    cooldown_ms,
-                                    expiry.format("%H:%M:%S")
-                                );
-                            }
+                                if (false)
+                                {
+                                    println!("[{}] COOLDOWN_SET: {} -> {}ms (until {})", character.name, cmd_name, cooldown_ms, expiry.format("%H:%M:%S"));
+                                }
                             }
                         }
                         else
@@ -1164,13 +1115,11 @@ async fn run_account_loop(
                             // No cooldown defined for this command!
                             if *cmd_name != "cmd_complete"
                             {
-                                if (false) {
-                                println!(
-                                    "[{}] NO_COOLDOWN_DEFINED: {} - will run again immediately!",
-                                    character.name, cmd_name
-                                );
+                                if (false)
+                                {
+                                    println!("[{}] NO_COOLDOWN_DEFINED: {} - will run again immediately!", character.name, cmd_name);
+                                }
                             }
-                        }
                         }
                         failed_attempts.remove(&char_key);
                     }
@@ -1180,15 +1129,8 @@ async fn run_account_loop(
                         {
                             offline_failures = offline_failures.saturating_add(1);
                             let backoff_ms = compute_offline_backoff_ms(offline_failures);
-                            write_character_log(
-                                &character.name,
-                                character.id,
-                                &format!("NETWORK: {} - retry in {}ms", error_msg, backoff_ms),
-                            );
-                            println!(
-                                "[{}] Network issue during {}: {}, backing off {}ms",
-                                account.accname, cmd_name, error_msg, backoff_ms
-                            );
+                            write_character_log(&character.name, character.id, &format!("NETWORK: {} - retry in {}ms", error_msg, backoff_ms));
+                            println!("[{}] Network issue during {}: {}, backing off {}ms", account.accname, cmd_name, error_msg, backoff_ms);
                             if sleep_or_stop(stop_rx, Duration::from_millis(backoff_ms)).await
                             {
                                 println!("[{}] Received stop signal while waiting for network", account.accname);
@@ -1205,10 +1147,7 @@ async fn run_account_loop(
 
                         if *attempts >= 3
                         {
-                            println!(
-                                "[{}] SKIP: {} failed 3 times, skipping",
-                                character.name, cmd_name
-                            );
+                            println!("[{}] SKIP: {} failed 3 times, skipping", character.name, cmd_name);
                             *attempts = 0;
                         }
 
@@ -1225,7 +1164,6 @@ async fn run_account_loop(
                         }
                     }
                 }
-
             }
             if offline_backoff_triggered
             {
@@ -1259,7 +1197,6 @@ async fn run_account_loop(
                     session: session_state.session,
                 });
             }
-
         }
 
         if offline_backoff_triggered

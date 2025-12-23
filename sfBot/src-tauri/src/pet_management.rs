@@ -59,7 +59,7 @@ pub async fn feed_all_pets(session: &mut SimpleSession, feed_pets: bool, expensi
     };
     let desired_levels_light = if (expensive_route)
     {
-        vec![0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 74, 0, 200]
+        vec![0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 74, 0, 0, 200]
     }
     else
     {

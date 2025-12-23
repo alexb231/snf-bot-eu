@@ -1688,7 +1688,7 @@ function populateCharacterSettings(settings) {
         'dungeonSkipIdols', 'dungeonSkipTwister', 'dungeonSkipTower', 'dungeonSkipSandstorm',
         'arenaManagerActive', 'arenaManagerSacrificeAfterToiletCycle',
         'toiletEnableToilet', 'toiletFlushWhenFull', 'toiletSacrificeEpics', 'toiletExcludeEpicWeapons',
-        'toiletSacrificeGems', 'toiletSacrificeNormalItems'
+        'toiletSacrificeGems', 'toiletSacrificeNormalItems', "miscDonothing"
     ];
 
     checkboxes.forEach(id => {

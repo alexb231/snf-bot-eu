@@ -25,7 +25,7 @@ pub async fn city_guard(session: &mut SimpleSession) -> Result<String, Box<dyn E
     let is_in_range = check_time_in_range(enable_city_guard_from, enable_city_guard_to);
     let beers_to_drink: i32 = std::cmp::min(fetch_character_setting(&gs, "tavernDrinkBeerAmount").unwrap_or(0), 12).max(0);
 
-    let hours_of_work_at_once: i32 = fetch_character_setting(&gs, "tavernCityGuardTimeToPlay").unwrap_or(0);
+    let hours_of_work_at_once: i32 = fetch_character_setting(&gs, "tavernCityGuardTimeToPlay").unwrap_or(1);
     // in this case all we can do is city guard so we should do that
     let hours_left = hours_until_to_time(to_time);
 
