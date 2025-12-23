@@ -509,19 +509,25 @@ impl ServerConnection {
     }
 }
 
-pub(crate) fn reqwest_client(
-    options: &ConnectionOptions,
-) -> Option<reqwest::Client> {
+pub(crate) fn reqwest_client(options: &ConnectionOptions) -> Option<reqwest::Client> {
     let mut headers = HeaderMap::new();
     headers.insert(
         HeaderName::from_static(ACCEPT_LANGUAGE.as_str()),
         HeaderValue::from_static("en;q=0.7,en-US;q=0.6"),
     );
-    let mut builder = reqwest::Client::builder();
+
+    let mut builder = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
+        .tcp_keepalive(Duration::from_secs(30))
+        .pool_idle_timeout(Duration::from_secs(60))
+        .default_headers(headers);
+
     if let Some(ua) = options.user_agent.clone() {
         builder = builder.user_agent(ua);
     }
-    builder.default_headers(headers).build().ok()
+
+    builder.build().ok()
 }
 
 #[derive(Debug, Clone)]

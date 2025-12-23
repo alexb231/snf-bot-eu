@@ -266,7 +266,7 @@ fn get_cooldowns() -> HashMap<&'static str, u64>
     cooldowns.insert("cmd_collect_fortress_resources", 30 * 60_000);
     cooldowns.insert("cmd_use_toilet", 120 * 60_000);
     cooldowns.insert("cmd_manage_inventory", 5 * 60_000);
-    cooldowns.insert("cmd_collect_free_mushroom", 180 * 60_000);
+    cooldowns.insert("cmd_collect_free_mushroom", 360 * 60_000);
     cooldowns.insert("cmd_fight_demon_portal", 30 * 60_000);
     cooldowns.insert("cmd_fight_guild_portal", 30 * 60_000);
     cooldowns.insert("cmd_fight_dungeon_with_lowest_level", 10 * 60_000);
