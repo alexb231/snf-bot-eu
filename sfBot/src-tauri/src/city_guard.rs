@@ -24,7 +24,7 @@ pub async fn city_guard(session: &mut SimpleSession) -> Result<String, Box<dyn E
     let to_time = NaiveTime::parse_from_str(&enable_city_guard_to, "%H:%M").unwrap();
     let is_in_range = check_time_in_range(enable_city_guard_from, enable_city_guard_to);
     let beers_to_drink: i32 = std::cmp::min(fetch_character_setting(&gs, "tavernDrinkBeerAmount").unwrap_or(0), 12).max(0);
-
+    let play_expeditions : bool = fetch_character_setting(&gs, "tavernPlayExpeditions").unwrap_or(true);
     let hours_of_work_at_once: i32 = fetch_character_setting(&gs, "tavernCityGuardTimeToPlay").unwrap_or(1);
     // in this case all we can do is city guard so we should do that
     let hours_left = hours_until_to_time(to_time);
@@ -41,7 +41,7 @@ pub async fn city_guard(session: &mut SimpleSession) -> Result<String, Box<dyn E
     let not_enough_mushrooms_for_beers = gs.character.mushrooms < beers_needed as u32;
     let no_beer_left = beers_drunk >= target_beers;
     // println!("no beer left {}", no_beer_left);
-    let nothing_left_todo = no_thirst_left && (no_beer_left || not_enough_mushrooms_for_beers);
+    let nothing_left_todo = !play_expeditions || (no_thirst_left && (no_beer_left || not_enough_mushrooms_for_beers));
     // println!("nothing left to do {}:", nothing_left_todo);
     // println!("--------------------------------------->{:?}",
     // gs.tavern.current_action);
