@@ -44,14 +44,7 @@ pub async fn perform_daily_tasks(session: &mut SimpleSession) -> Result<String, 
     let enable_bare_hand_atk: bool = fetch_character_setting(&gs, "miscPerformDailyBareHand").unwrap_or(false);
     if enable_bare_hand_atk && should_do_daily_task(dt.clone(), TaskType::WinFightsBareHands)
     {
-        let weapon_equipped_before = &gs.character.equipment.0[EquipmentSlot::Weapon];
-        // TODO! readd bare hand attacks
         let res = bare_handed_attack_task(session).await?;
-
-        if let Some(weapon) = weapon_equipped_before
-        {
-            ensure_weapon_is_equipped_back(session, weapon.clone()).await?;
-        }
         result += res.as_str();
     }
 
@@ -89,28 +82,6 @@ pub async fn perform_daily_tasks(session: &mut SimpleSession) -> Result<String, 
     }
 
     return Ok(finalMessage);
-}
-
-pub async fn ensure_weapon_is_equipped_back(session: &mut SimpleSession, weapon_equipped_before: Item) -> Result<(), Box<dyn std::error::Error>>
-{
-    let gs = session.send_command(Command::Update).await?;
-    let inventory = &gs.character.inventory;
-    let inventory_sorted = sorted_items_with_indices(inventory);
-    for (pos, item) in inventory_sorted.iter()
-    {
-        if **item == weapon_equipped_before
-        {
-            let equip_weapon = Command::ItemMove {
-                from: MainInventory,
-                from_pos: *pos,
-                to: ItemPlace::Equipment,
-                to_pos: 8,
-            };
-            session.send_command(equip_weapon).await?;
-            return Ok(());
-        }
-    }
-    return Ok(());
 }
 
 pub async fn gamble(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
@@ -260,14 +231,19 @@ async fn get_class_map() -> Result<HashMap<String, Vec<PlayerEntry>>, reqwest::E
 //
 pub async fn bare_handed_attack_task(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
 {
+    const WEAPON_SLOT_POS: usize = 8;
+
     let mut result = String::from(", Bare handed attack (");
+
     let gs = session.send_command(Command::CheckArena).await?.clone();
+
     let free_slots = gs.character.inventory.count_free_slots();
     let weapon_equipped = gs.character.equipment.0[EquipmentSlot::Weapon].is_some();
     if free_slots <= 0 && weapon_equipped
     {
         return Ok(String::from(""));
     }
+
     let arena = &gs.arena;
     let total_amount_of_players = gs.hall_of_fames.players_total;
     let pages = total_amount_of_players / 51; // sometimes HOF return -1
@@ -281,53 +257,107 @@ pub async fn bare_handed_attack_task(session: &mut SimpleSession) -> Result<Stri
     let current_time_minus_2 = current_time - Duration::minutes(2);
 
     let free_fight = if let Some(next_free_fight) = arena.next_free_fight { current_time_minus_2 >= next_free_fight } else { false };
-    if free_fight
+
+    if !free_fight
     {
-        if let Some(slot) = gs.character.inventory.free_slot()
-        {
-            let index = slot.backpack_pos();
-            let final_place = ItemPlace::MainInventory;
-
-            // Unequip weapon if needed
-            if weapon_equipped
-            {
-                let unequip_item = Command::ItemMove {
-                    from: ItemPlace::Equipment,
-                    from_pos: 8,
-                    to: final_place,
-                    to_pos: index,
-                };
-                session.send_command(unequip_item).await?;
-                result += "unequipped weapon - ";
-            }
-
-            // Fetch HOF page
-            let hall_of_fame_fetch = Command::HallOfFamePage { page: max_page_to_attack_lowest_enemy as usize };
-            let updated_gs = session.send_command(hall_of_fame_fetch).await?;
-
-            // Attack
-            if let Some(player) = updated_gs.hall_of_fames.players.get(0)
-            {
-                let fight_player = Command::Fight { name: player.name.clone(), use_mushroom: false };
-                result += &format!("fought opponent: {} - ", player.name);
-                session.send_command(fight_player).await?;
-
-                // Equip weapon back if needed
-                if weapon_equipped
-                {
-                    let equip_item = Command::ItemMove {
-                        from: final_place,
-                        from_pos: index,
-                        to: ItemPlace::Equipment,
-                        to_pos: 8,
-                    };
-                    session.send_command(equip_item).await?;
-                    result += "equipped weapon back on.)";
-                }
-            }
-        }
+        return Ok(String::from(""));
     }
-    return Ok(String::from(""));
+
+    let mut moved_weapon_inv_pos: Option<usize> = None;
+    let mut moved_weapon_ident = None;
+
+    if weapon_equipped
+    {
+        let Some(slot) = gs.character.inventory.free_slot()
+        else
+        {
+            return Ok(String::from(""));
+        };
+
+        let inv_pos = slot.backpack_pos();
+        let ident = gs.character.equipment.0[EquipmentSlot::Weapon].as_ref().unwrap().command_ident();
+
+        session
+            .send_command(Command::ItemMove {
+                from: ItemPlace::Equipment,
+                from_pos: WEAPON_SLOT_POS,
+                to: ItemPlace::MainInventory,
+                to_pos: inv_pos,
+                item_ident: ident,
+            })
+            .await?;
+
+        result.push_str("unequipped weapon - ");
+        moved_weapon_inv_pos = Some(inv_pos);
+        moved_weapon_ident = Some(ident);
+    }
+
+    let updated_gs = match session.send_command(Command::HallOfFamePage { page: max_page_to_attack_lowest_enemy as usize }).await
+    {
+        Ok(v) => v,
+        Err(e) =>
+        {
+            if let (Some(inv_pos), Some(ident)) = (moved_weapon_inv_pos, moved_weapon_ident)
+            {
+                let _ = session
+                    .send_command(Command::ItemMove {
+                        from: ItemPlace::MainInventory,
+                        from_pos: inv_pos,
+                        to: ItemPlace::Equipment,
+                        to_pos: WEAPON_SLOT_POS,
+                        item_ident: ident,
+                    })
+                    .await;
+            }
+            return Err(e.into());
+        }
+    };
+
+    if let Some(player) = updated_gs.hall_of_fames.players.get(0)
+    {
+        let fight_player = Command::Fight { name: player.name.clone(), use_mushroom: false };
+        result.push_str(&format!("fought opponent: {} - ", player.name));
+
+        // No extra dynbox: if this errors, we return immediately (weapon might stay
+        // unequipped).
+        session.send_command(fight_player).await?;
+
+        // Equip back (only if fight succeeded)
+        if let (Some(inv_pos), Some(ident)) = (moved_weapon_inv_pos, moved_weapon_ident)
+        {
+            let _ = session
+                .send_command(Command::ItemMove {
+                    from: ItemPlace::MainInventory,
+                    from_pos: inv_pos,
+                    to: ItemPlace::Equipment,
+                    to_pos: WEAPON_SLOT_POS,
+                    item_ident: ident,
+                })
+                .await;
+            result.push_str("equipped weapon back on.)");
+        }
+        else
+        {
+            result.push_str("done.)");
+        }
+
+        return Ok(result);
+    }
+
+    if let (Some(inv_pos), Some(ident)) = (moved_weapon_inv_pos, moved_weapon_ident)
+    {
+        let _ = session
+            .send_command(Command::ItemMove {
+                from: ItemPlace::MainInventory,
+                from_pos: inv_pos,
+                to: ItemPlace::Equipment,
+                to_pos: WEAPON_SLOT_POS,
+                item_ident: ident,
+            })
+            .await;
+    }
+
+    Ok(String::from(""))
 }
 
 pub fn should_do_daily_task(available_tasks: DailyTasks, task_type: TaskType) -> bool
