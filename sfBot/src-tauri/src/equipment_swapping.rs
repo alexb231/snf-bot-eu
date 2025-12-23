@@ -265,7 +265,6 @@ pub async fn check_and_swap_equipment(
 {
     // Initial snapshot for scanning
     let gs = session.send_command(Command::Update).await?.clone();
-    println!("hi");
     let min_boost_percent: f64 = fetch_character_setting(&gs, "itemsEquipSwapMinBoostPercent")
         .unwrap_or(0)
         .max(0) as f64;
@@ -371,7 +370,6 @@ pub async fn check_and_swap_equipment(
     }
 
     if changes.is_empty() {
-        println!("sadsadsad");
         Ok("No better gear found to equip from main/extended inventory.".to_string())
     } else {
         write_character_log(

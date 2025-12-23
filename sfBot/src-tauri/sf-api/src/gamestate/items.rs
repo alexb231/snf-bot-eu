@@ -339,7 +339,7 @@ pub struct Item {
     /// This is the color, or other cosmetic variation of an item. There is no
     /// clear 1 => red mapping, so only the raw value here
     pub color: u8,
-
+    pub model_id_raw: u16,
     pub upgrade_count: u8,
     pub item_quality: u32,
     pub is_washed: bool,
@@ -383,7 +383,7 @@ impl Item {
     pub fn command_ident(&self) -> ItemCommandIdent {
         ItemCommandIdent {
             typ: self.typ.raw_id(),
-            model_id: self.model_id,
+            model_id: self.model_id_raw,
             price: self.price,
             mush_price: self.mushroom_price,
         }
@@ -587,8 +587,8 @@ impl Item {
                 }
             }
         }
-        let model_id: u16 =
-            data.cimget(3, "item model id", |x| (x & 0xFFFF) % 1000)?;
+        let model_id_raw: u16 = data.cimget(3, "item model id raw", |x| (x & 0xFFFF))?;
+        let model_id: u16 = model_id_raw % 1000;
 
         let color = match model_id {
             ..=49 if typ != ItemType::Talisman => data
@@ -603,6 +603,7 @@ impl Item {
         let item = Item {
             typ,
             model_id,
+            model_id_raw,
             rune,
             type_specific_val: data.csiget(5, "effect value", 0)?,
             gem_slot,

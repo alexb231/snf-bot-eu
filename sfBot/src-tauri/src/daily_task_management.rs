@@ -3,6 +3,7 @@
 use std::{collections::HashMap, error::Error, sync::Mutex};
 
 use chrono::{Duration, Local};
+use enum_map::Enum;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use serde_json::json;
@@ -10,13 +11,13 @@ use sf_api::{
     command::{Command, Command::ViewPlayer},
     gamestate::{
         character::Class,
-        items::{EquipmentSlot, InventoryType, Item, ItemPlace, ItemPlace::MainInventory, PlayerItemPlace},
+        items::{EquipmentSlot, InventoryType, Item, ItemCommandIdent, ItemPlace, ItemPlace::MainInventory, PlayerItemPlace},
         rewards::{DailyTasks, TaskType},
         tavern::GambleResult,
     },
     SimpleSession,
 };
-use sf_api::gamestate::items::ItemCommandIdent;
+
 use crate::{fetch_character_setting, inventory_management::sorted_items_with_indices};
 
 #[derive(Debug, Deserialize, Clone)]
@@ -229,53 +230,31 @@ async fn get_class_map() -> Result<HashMap<String, Vec<PlayerEntry>>, reqwest::E
     Ok(class_map)
 }
 //
-pub async fn bare_handed_attack_task(
-    session: &mut SimpleSession,
-) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn bare_handed_attack_task(session: &mut SimpleSession) -> Result<String, Box<dyn std::error::Error>>
+{
+    use chrono::{Duration, Local};
+    use sf_api::gamestate::items::{EquipmentSlot, ItemCommandIdent, ItemPlace};
+
     // IMPORTANT:
     // - Equipment slots for commands are 0-based in the struct, encoder adds +1.
-    // - Inventory slots for commands are 0-based PER inventory (main 0..4, extended 0..),
-    //   so NEVER use backpack_pos() as to_pos / from_pos for inventory moves.
+    // - Inventory slots for commands are 0-based PER inventory (main 0..4, extended
+    //   0..), so NEVER use backpack_pos() as to_pos / from_pos for inventory moves.
 
     const WEAPON_SLOT_POS: usize = EquipmentSlot::Weapon as usize - 1; // Weapon is 9 => 0-based 8
 
-    fn raw_item_move(
-        from: ItemPlace,
-        from_pos: usize,
-        to: ItemPlace,
-        to_pos: usize,
-        ident: ItemCommandIdent,
-    ) -> String {
-        format!(
-            "PlayerItemMove:{}/{}/{}/{}/{}",
-            from as usize,
-            from_pos + 1,
-            to as usize,
-            to_pos + 1,
-            ident
-        )
-    }
+    fn raw_item_move(from: ItemPlace, from_pos: usize, to: ItemPlace, to_pos: usize, ident: ItemCommandIdent) -> String { format!("PlayerItemMove:{}/{}/{}/{}/{}", from as usize, from_pos + 1, to as usize, to_pos + 1, ident) }
 
     let mut result = String::from(", Bare handed attack (");
 
     let gs = session.send_command(Command::CheckArena).await?.clone();
 
     // DEBUG: print equipment
-    println!(
-        "=== EQUIPMENT for {} (id={}) ===",
-        gs.character.name, gs.character.player_id
-    );
-    for (slot, maybe_item) in gs.character.equipment.0.iter() {
-        match maybe_item {
-            Some(item) => println!(
-                "slot {:?}: typ={:?} price={} ident={} epic={} legendary={}",
-                slot,
-                item.typ,
-                item.price,
-                item.command_ident(),
-                item.is_epic(),
-                item.is_legendary(),
-            ),
+    println!("=== EQUIPMENT for {} (id={}) ===", gs.character.name, gs.character.player_id);
+    for (slot, maybe_item) in gs.character.equipment.0.iter()
+    {
+        match maybe_item
+        {
+            Some(item) => println!("slot {:?}: typ={:?} price={} ident={} epic={} legendary={}", slot, item.typ, item.price, item.command_ident(), item.is_epic(), item.is_legendary(),),
             None => println!("slot {:?}: EMPTY", slot),
         }
     }
@@ -283,14 +262,16 @@ pub async fn bare_handed_attack_task(
 
     let free_slots = gs.character.inventory.count_free_slots();
     let weapon_equipped = gs.character.equipment.0[EquipmentSlot::Weapon].is_some();
-    if free_slots == 0 && weapon_equipped {
+    if free_slots == 0 && weapon_equipped
+    {
         return Ok(String::from(""));
     }
 
     let arena = &gs.arena;
     let total_amount_of_players = gs.hall_of_fames.players_total;
     let pages = total_amount_of_players / 51; // sometimes HOF return -1
-    if pages < 2 {
+    if pages < 2
+    {
         return Ok(String::from(""));
     }
     let max_page_to_attack_lowest_enemy = pages - 2;
@@ -298,13 +279,10 @@ pub async fn bare_handed_attack_task(
     let current_time = Local::now();
     let current_time_minus_2 = current_time - Duration::minutes(2);
 
-    let free_fight = if let Some(next_free_fight) = arena.next_free_fight {
-        current_time_minus_2 >= next_free_fight
-    } else {
-        false
-    };
+    let free_fight = if let Some(next_free_fight) = arena.next_free_fight { current_time_minus_2 >= next_free_fight } else { false };
 
-    if !free_fight {
+    if !free_fight
+    {
         return Ok(String::from(""));
     }
 
@@ -313,20 +291,38 @@ pub async fn bare_handed_attack_task(
     let mut moved_weapon_pos: Option<usize> = None;
     let mut moved_weapon_ident: Option<ItemCommandIdent> = None;
 
+    // Extra debug we want to be able to print even later:
+    let mut dbg_free_backpack_pos: Option<usize> = None;
+    let mut dbg_inv_type: Option<InventoryType> = None;
+    let mut dbg_inv_pos: Option<usize> = None;
+    let mut dbg_to_place: Option<ItemPlace> = None;
+    let mut dbg_ident: Option<ItemCommandIdent> = None;
+
     // Unequip weapon if needed
-    if weapon_equipped {
-        let Some(free) = gs.character.inventory.free_slot() else {
+    if weapon_equipped
+    {
+        let Some(free) = gs.character.inventory.free_slot()
+        else
+        {
             return Ok(String::from(""));
         };
 
         // Convert BagPosition -> correct command place/pos
         let (inv_type, inv_pos) = free.inventory_pos();
-        let to_place = inv_type.item_position(); // MainInventory -> ItemPlace::MainInventory, ExtendedInventory -> ItemPlace::FortressChest
+        let to_place = inv_type.item_position(); // MainInventory -> ItemPlace::MainInventory, ExtendedInventory ->
+                                                 // ItemPlace::FortressChest
 
-        let ident = gs.character.equipment.0[EquipmentSlot::Weapon]
-            .as_ref()
-            .unwrap()
-            .command_ident();
+        let ident = gs.character.equipment.0[EquipmentSlot::Weapon].as_ref().unwrap().command_ident();
+
+        // store debug info (so we can print it later on error)
+        dbg_free_backpack_pos = Some(free.backpack_pos());
+        dbg_inv_type = Some(inv_type);
+        dbg_inv_pos = Some(inv_pos);
+        dbg_to_place = Some(to_place);
+        dbg_ident = Some(ident);
+
+        println!("[DEBUG] free_slot: backpack_pos={} inv_type={:?} inv_pos={} to_place={:?}", free.backpack_pos(), inv_type, inv_pos, to_place);
+        println!("[DEBUG] weapon ident = {}", ident);
 
         let unequip_cmd = Command::ItemMove {
             from: ItemPlace::Equipment,
@@ -336,10 +332,7 @@ pub async fn bare_handed_attack_task(
             item_ident: ident,
         };
 
-        println!(
-            "[DEBUG] unequip raw: {}",
-            raw_item_move(ItemPlace::Equipment, WEAPON_SLOT_POS, to_place, inv_pos, ident)
-        );
+        println!("[DEBUG] unequip raw: {}", raw_item_move(ItemPlace::Equipment, WEAPON_SLOT_POS, to_place, inv_pos, ident));
 
         session.send_command(unequip_cmd).await?;
         result.push_str("unequipped weapon - ");
@@ -347,72 +340,71 @@ pub async fn bare_handed_attack_task(
         moved_weapon_place = Some(to_place);
         moved_weapon_pos = Some(inv_pos);
         moved_weapon_ident = Some(ident);
+
+        // OPTIONAL: verify immediately
+        let after = session.send_command(Command::Update).await?.clone();
+        let weapon_now = after.character.equipment.0[EquipmentSlot::Weapon].is_some();
+        println!("[DEBUG] after unequip: weapon slot occupied? {}", weapon_now);
     }
 
     // Fetch HOF page (re-equip weapon if this step fails)
-    let updated_gs = match session
-        .send_command(Command::HallOfFamePage {
-            page: max_page_to_attack_lowest_enemy as usize,
-        })
-        .await
+    let updated_gs = match session.send_command(Command::HallOfFamePage { page: max_page_to_attack_lowest_enemy as usize }).await
     {
         Ok(v) => v,
-        Err(e) => {
-            if let (Some(from_place), Some(from_pos), Some(ident)) =
-                (moved_weapon_place, moved_weapon_pos, moved_weapon_ident)
+        Err(e) =>
+        {
+            println!("[ERROR] HallOfFamePage failed: {}", e);
+
+            // Print the stored debug context
+            println!("[DEBUG] context: free.backpack_pos={:?} inv_type={:?} inv_pos={:?} to_place={:?} ident={:?}", dbg_free_backpack_pos, dbg_inv_type, dbg_inv_pos, dbg_to_place, dbg_ident);
+
+            // best-effort re-equip
+            if let (Some(from_place), Some(from_pos), Some(ident)) = (moved_weapon_place, moved_weapon_pos, moved_weapon_ident)
             {
-                let back_cmd = Command::ItemMove {
-                    from: from_place,
-                    from_pos,
-                    to: ItemPlace::Equipment,
-                    to_pos: WEAPON_SLOT_POS,
-                    item_ident: ident,
-                };
+                println!("[DEBUG] re-equip (on HOF error) raw: {}", raw_item_move(from_place, from_pos, ItemPlace::Equipment, WEAPON_SLOT_POS, ident));
 
-                println!(
-                    "[DEBUG] re-equip (on HOF error) raw: {}",
-                    raw_item_move(from_place, from_pos, ItemPlace::Equipment, WEAPON_SLOT_POS, ident)
-                );
-
-                let _ = session.send_command(back_cmd).await;
+                let _ = session
+                    .send_command(Command::ItemMove {
+                        from: from_place,
+                        from_pos,
+                        to: ItemPlace::Equipment,
+                        to_pos: WEAPON_SLOT_POS,
+                        item_ident: ident,
+                    })
+                    .await;
             }
+
             return Err(e.into());
         }
     };
 
     // Attack
-    if let Some(player) = updated_gs.hall_of_fames.players.get(0) {
-        let fight_player = Command::Fight {
-            name: player.name.clone(),
-            use_mushroom: false,
-        };
+    if let Some(player) = updated_gs.hall_of_fames.players.get(0)
+    {
+        let fight_player = Command::Fight { name: player.name.clone(), use_mushroom: false };
         result.push_str(&format!("fought opponent: {} - ", player.name));
 
-        // NOTE: if fight fails, we return immediately (no extra boxing),
-        // so weapon might stay unequipped. If you want "always re-equip even on fight error",
-        // we need either boxing or a concrete error type.
         session.send_command(fight_player).await?;
 
         // Equip weapon back (only if fight succeeded)
-        if let (Some(from_place), Some(from_pos), Some(ident)) =
-            (moved_weapon_place, moved_weapon_pos, moved_weapon_ident)
+        if let (Some(from_place), Some(from_pos), Some(ident)) = (moved_weapon_place, moved_weapon_pos, moved_weapon_ident)
         {
-            let back_cmd = Command::ItemMove {
-                from: from_place,
-                from_pos,
-                to: ItemPlace::Equipment,
-                to_pos: WEAPON_SLOT_POS,
-                item_ident: ident,
-            };
+            println!("[DEBUG] re-equip raw: {}", raw_item_move(from_place, from_pos, ItemPlace::Equipment, WEAPON_SLOT_POS, ident));
 
-            println!(
-                "[DEBUG] re-equip raw: {}",
-                raw_item_move(from_place, from_pos, ItemPlace::Equipment, WEAPON_SLOT_POS, ident)
-            );
+            let _ = session
+                .send_command(Command::ItemMove {
+                    from: from_place,
+                    from_pos,
+                    to: ItemPlace::Equipment,
+                    to_pos: WEAPON_SLOT_POS,
+                    item_ident: ident,
+                })
+                .await;
 
-            let _ = session.send_command(back_cmd).await;
             result.push_str("equipped weapon back on.)");
-        } else {
+        }
+        else
+        {
             result.push_str("done.)");
         }
 
@@ -420,23 +412,19 @@ pub async fn bare_handed_attack_task(
     }
 
     // No player found -> re-equip if needed
-    if let (Some(from_place), Some(from_pos), Some(ident)) =
-        (moved_weapon_place, moved_weapon_pos, moved_weapon_ident)
+    if let (Some(from_place), Some(from_pos), Some(ident)) = (moved_weapon_place, moved_weapon_pos, moved_weapon_ident)
     {
-        let back_cmd = Command::ItemMove {
-            from: from_place,
-            from_pos,
-            to: ItemPlace::Equipment,
-            to_pos: WEAPON_SLOT_POS,
-            item_ident: ident,
-        };
+        println!("[DEBUG] re-equip (no player) raw: {}", raw_item_move(from_place, from_pos, ItemPlace::Equipment, WEAPON_SLOT_POS, ident));
 
-        println!(
-            "[DEBUG] re-equip (no player) raw: {}",
-            raw_item_move(from_place, from_pos, ItemPlace::Equipment, WEAPON_SLOT_POS, ident)
-        );
-
-        let _ = session.send_command(back_cmd).await;
+        let _ = session
+            .send_command(Command::ItemMove {
+                from: from_place,
+                from_pos,
+                to: ItemPlace::Equipment,
+                to_pos: WEAPON_SLOT_POS,
+                item_ident: ident,
+            })
+            .await;
     }
 
     Ok(String::from(""))
@@ -448,17 +436,7 @@ pub fn should_do_daily_task(available_tasks: DailyTasks, task_type: TaskType) ->
     return available_tasks.get_available(task_type).is_some();
 }
 
-fn raw_item_move(from: ItemPlace, from_pos: usize, to: ItemPlace, to_pos: usize, item_ident: ItemCommandIdent) -> String {
-    format!(
-        "PlayerItemMove:{}/{}/{}/{}/{}",
-        from as usize,
-        from_pos + 1,
-        to as usize,
-        to_pos + 1,
-        item_ident
-    )
-}
-
+fn raw_item_move(from: ItemPlace, from_pos: usize, to: ItemPlace, to_pos: usize, item_ident: ItemCommandIdent) -> String { format!("PlayerItemMove:{}/{}/{}/{}/{}", from as usize, from_pos + 1, to as usize, to_pos + 1, item_ident) }
 
 async fn send_to_hook(message: &str)
 {

@@ -102,6 +102,7 @@ impl Default for Shop {
             price: u32::MAX,
             mushroom_price: u32::MAX,
             model_id: 0,
+            model_id_raw: 0,
             class: None,
             type_specific_val: 0,
             attributes: EnumMap::default(),
