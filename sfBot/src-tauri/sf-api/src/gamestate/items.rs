@@ -471,15 +471,15 @@ impl Item {
         // Mage    => Weapon: Magic,  Armor: Light
         match (class, class_requirement) {
             // Weapon: Meele, Armor: Heavy
-            (Warrior, Warrior) => true,
+            (Warrior | Paladin, Warrior) => true,
             (Berserker, Warrior) => !self.typ.is_shield(),
             // Weapon: Ranged, Armor: Medium
             (Scout, Scout) => true,
             // Weapon: Magic, Armor: Light
             (Mage | Necromancer, Mage) => true,
-            // Weapon: Meele, Armor: Medium
-            (Assassin, Warrior) => self.typ.is_weapon(),
-            (Assassin, Scout) => !self.typ.is_weapon(),
+            // Weapon: Meele, Armor: Medium  (Assassin + PlagueDoctor)
+            (Assassin | PlagueDoctor, Warrior) => self.typ.is_weapon(),
+            (Assassin | PlagueDoctor, Scout) => !self.typ.is_weapon(),
             // Weapon: Magic, Armor: Medium
             (Bard | Druid, Mage) => self.typ.is_weapon(),
             (Bard | Druid, Scout) => !self.typ.is_weapon(),
