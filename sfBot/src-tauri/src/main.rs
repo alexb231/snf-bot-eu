@@ -124,7 +124,7 @@ fn load_server_port() -> u16 {
     }
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 6)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 7)]
 async fn main() {
     #[cfg(target_os = "linux")]
     if !cfg!(debug_assertions) {

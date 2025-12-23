@@ -3,7 +3,7 @@ setlocal
 
 set "SCRIPT_DIR=%~dp0"
 set "TAURI_DIR=%SCRIPT_DIR%sfBot\src-tauri"
-set "OUT_DIR=C:\Users\hello\Desktop\sfbot\mains"
+set "OUT_DIR=C:\Users\hello\Desktop\sfbot"
 
 if not exist "%TAURI_DIR%" (
   echo Fehler: Tauri-Verzeichnis nicht gefunden: %TAURI_DIR%
