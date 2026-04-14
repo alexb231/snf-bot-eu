@@ -1,0 +1,179 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+}
+
+#settingsWindow {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.settings-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+}
+
+.sidebar {
+    width: 20%;
+    max-width: 200px;
+    background-color: #f4f4f4;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.sidebar button {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    font-size: 18px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+#settingsMenu{
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow-x: hidden;
+    background-color: #f4f4f4;
+    width: 100%;
+}
+
+.sidebar button:hover {
+    background-color: #2980b9;
+}
+
+.main-content {
+    width: 75%;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+
+.section {
+    background-color: #f4f4f4;
+}
+
+.section h2 {
+    font-size: 24px;
+    margin-bottom: 15px;
+}
+
+.settings-section {
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    width: 99%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#saveButton, #closeSettingsButton {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#saveButton:hover, #closeSettingsButton:hover {
+    background-color: #2980b9;
+}
+
+#closeSettingsButton {
+    background-color: #e74c3c;
+}
+
+#closeSettingsButton:hover {
+    background-color: #c0392b;
+}
+
+#importSettingsButton
+{
+    height:60%;
+    width: 30%;
+    margin-top:20px;
+
+}
+
+#settingCloseBtns {
+    position: sticky;
+    bottom: 0;
+    width: 100%;
+    display: flex;
+    padding: 10px;
+    box-sizing: border-box;
+    justify-content: space-evenly;
+}
+
+.settingsCloseBtn {
+    width: 30%;
+    margin-bottom: 0;
+}
+
+#tavernSettingsExpeditionRewardsPrioList
+{
+    display: flex;
+    flex-direction: column;
+    justify-content: normal;
+    width: 30%;
+}
+
+
+#dicesortableList {
+    display: block;
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sortableItem {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1px;
+    margin-bottom: 5px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    width: 50%;
+    height: auto;
+}
+
+.buttonContainer {
+    display: flex;
+    flex-direction: column;
+    margin-left: 10px;
+}
+
+.upArrow, .downArrow {
+    width: 30px;
+    padding: 5px;
+    margin-bottom: 3px;
+    text-align: center;
+}
+
+

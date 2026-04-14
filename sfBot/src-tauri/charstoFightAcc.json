@@ -1,0 +1,10 @@
+{
+  "accounts": [
+    {
+      "accname": "crashdummy",
+      "password": "Aa12345687",
+      "single": false,
+      "server": ""
+    }
+  ]
+}
