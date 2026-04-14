@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SF Bot - Der beste Shakes and Fidget Bot. Automatisiere dein Gameplay mit dem kostenlosen SF Bot. Unterstützt die meisten Features inkl. Legendary Dungeon.">
+    <meta name="keywords" content="sf bot, sfbot, sf bot download, shakes and fidget bot, snf bot, shakes fidget automation, sfgame bot, sf bot free">
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="SF Bot Team">
+
+    <meta property="og:title" content="SF Bot - Shakes and Fidget Bot">
+    <meta property="og:description" content="Automatisiere dein Shakes and Fidget Gameplay. Kostenloser Download mit Auto-Update.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://sfbot.eu">
+
+    <title>SF Bot - Download | Shakes and Fidget Bot</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1d23;
+            color: #e0e0e0;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 50px 20px 30px;
+        }
+
+        h1 {
+            font-size: 2.8rem;
+            color: #fff;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        h1 span {
+            color: #3b9eff;
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: #888;
+        }
+
+        .hero {
+            background: #22262e;
+            border-radius: 12px;
+            padding: 35px;
+            margin-bottom: 30px;
+            border: 1px solid #2d323c;
+        }
+
+        .download-section {
+            text-align: center;
+        }
+
+        .btn-primary {
+            display: inline-block;
+            background: #3b9eff;
+            color: #fff;
+            padding: 16px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #2b8ae6;
+        }
+
+        .btn-secondary {
+            display: inline-block;
+            color: #888;
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            text-decoration: none;
+            border: 1px solid #3a3f4a;
+            border-radius: 6px;
+            margin-top: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            color: #e0e0e0;
+            border-color: #555;
+        }
+
+        .auto-update {
+            display: block;
+            color: #999;
+            font-size: 0.85rem;
+            margin-top: 10px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .feature {
+            background: #22262e;
+            padding: 22px;
+            border-radius: 10px;
+            border: 1px solid #2d323c;
+        }
+
+        .feature h3 {
+            color: #3b9eff;
+            margin-bottom: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .feature p {
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        .notice {
+            background: #22262e;
+            border-left: 4px solid #3b9eff;
+            padding: 18px 22px;
+            border-radius: 0 10px 10px 0;
+            margin-bottom: 30px;
+            border-top: 1px solid #2d323c;
+            border-right: 1px solid #2d323c;
+            border-bottom: 1px solid #2d323c;
+        }
+
+        .notice h3 {
+            color: #3b9eff;
+            margin-bottom: 6px;
+            font-size: 1rem;
+        }
+
+        .notice p {
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        .screenshots {
+            margin-bottom: 30px;
+        }
+
+        .screenshots h2 {
+            text-align: center;
+            color: #fff;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .screenshot-item {
+            cursor: pointer;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #2d323c;
+            transition: transform 0.2s, border-color 0.2s;
+            background: #22262e;
+        }
+
+        .screenshot-item:hover {
+            transform: translateY(-3px);
+            border-color: #3b9eff;
+        }
+
+        .screenshot-item img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .screenshot-caption {
+            padding: 12px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .forum-link {
+            text-align: center;
+            padding: 25px;
+            background: #22262e;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border: 1px solid #2d323c;
+        }
+
+        .forum-link p {
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .forum-link a {
+            color: #3b9eff;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .forum-link a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            text-align: center;
+            padding: 25px;
+            color: #555;
+            font-size: 0.85rem;
+        }
+
+        /* Lightbox */
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 8px;
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: #fff;
+            font-size: 2rem;
+            cursor: pointer;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .hero {
+                padding: 25px;
+            }
+
+            .btn-primary {
+                padding: 14px 30px;
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span>SF</span> Bot</h1>
+            <p class="tagline">Der Shakes and Fidget Bot</p>
+        </header>
+
+        <main>
+            <section class="hero">
+                <div class="download-section">
+                    <a href="https://downloader.sfbot.eu/updates/sfbot_installer.exe" class="btn-primary">
+                        Download Installer
+                    </a>
+                    <br>
+                    <a href="https://downloader.sfbot.eu/updates/sfbot.exe" class="btn-secondary">
+                        Direkter Download (ohne Installer)
+                    </a>
+                    <p class="auto-update">Der Bot updated sich automatisch bei neuen Patches.</p>
+                </div>
+            </section>
+
+            <section class="features">
+                <article class="feature">
+                    <h3>Umfangreiche Automatisierung</h3>
+                    <p>Arena, Dungeons, Expeditionen, Taverne, Festung, Gildenaktivitäten und mehr - alles automatisiert.</p>
+                </article>
+                <article class="feature">
+                    <h3>Multi-Account Support</h3>
+                    <p>Verwalte mehrere Charaktere gleichzeitig mit individuellen Einstellungen pro Account.</p>
+                </article>
+                <article class="feature">
+                    <h3>Intelligentes Pet-Management</h3>
+                    <p>Automatisches Füttern, Training und optimale Nutzung deiner Pets.</p>
+                </article>
+            </section>
+
+            <section class="notice">
+                <h3>Aktive Entwicklung</h3>
+                <p>Der SF Bot wird gerade komplett neu gebaut. Das ermöglicht uns, alle Features einzubauen - inklusive <strong>Legendary Dungeon</strong> und alles was noch kommt.</p>
+            </section>
+
+            <section class="screenshots">
+                <h2>So sieht's aus</h2>
+                <div class="screenshot-grid">
+                    <div class="screenshot-item" onclick="openLightbox(this.querySelector('img').src)">
+                        <img src="img/screenshot-settings.png" alt="SF Bot Einstellungen">
+                        <div class="screenshot-caption">Charakter-Einstellungen</div>
+                    </div>
+                    <div class="screenshot-item" onclick="openLightbox(this.querySelector('img').src)">
+                        <img src="img/screenshot-dashboard.png" alt="SF Bot Dashboard">
+                        <div class="screenshot-caption">Account-Dashboard</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="forum-link">
+                <p>Fragen, Feedback oder Probleme?</p>
+                <a href="https://forum.sfbot.eu/index.php">Ab ins Forum &rarr;</a>
+            </section>
+        </main>
+
+        <footer>
+            <p>SF Bot - Shakes and Fidget Automation</p>
+        </footer>
+    </div>
+
+    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+        <span class="lightbox-close">&times;</span>
+        <img id="lightbox-img" src="" alt="Screenshot">
+    </div>
+
+    <script>
+        function openLightbox(src) {
+            document.getElementById('lightbox-img').src = src;
+            document.getElementById('lightbox').classList.add('active');
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('active');
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeLightbox();
+        });
+    </script>
+</body>
+</html>

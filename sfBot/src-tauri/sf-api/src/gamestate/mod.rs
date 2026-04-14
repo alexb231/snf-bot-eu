@@ -1,0 +1,2250 @@
+pub mod arena;
+pub mod character;
+pub mod dungeons;
+pub mod fortress;
+pub mod guild;
+pub mod idle;
+pub mod items;
+pub mod legendary_dungeon;
+pub mod rewards;
+pub mod social;
+pub mod tavern;
+pub mod underworld;
+pub mod unlockables;
+
+use std::{
+    borrow::Borrow,
+    collections::{HashMap, HashSet},
+};
+
+use chrono::{DateTime, Duration, Local, NaiveDateTime};
+use enum_map::EnumMap;
+use log::{error, warn};
+use num_traits::FromPrimitive;
+use strum::{EnumCount, IntoEnumIterator};
+
+use crate::{
+    command::*,
+    error::*,
+    gamestate::{
+        arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
+        items::*, legendary_dungeon::*, rewards::*, social::*, tavern::*,
+        underworld::*, unlockables::*,
+    },
+    misc::*,
+    response::{Response, ResponseVal},
+};
+
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GameState {
+    
+    
+    pub character: Character,
+    
+    pub tavern: Tavern,
+    
+    pub arena: Arena,
+    
+    pub last_fight: Option<Fight>,
+    
+    
+    pub shops: EnumMap<ShopType, Shop>,
+    pub shop_item_lvl: u32,
+    
+    pub guild: Option<Guild>,
+    
+    pub specials: TimedSpecials,
+    
+    pub dungeons: Dungeons,
+    
+    pub underworld: Option<Underworld>,
+    
+    pub fortress: Option<Fortress>,
+    
+    pub pets: Option<Pets>,
+    
+    pub hellevator: HellevatorEvent,
+    
+    
+    pub legendary_dungeon: LegendaryDungeonEvent,
+    
+    pub blacksmith: Option<Blacksmith>,
+    
+    pub witch: Option<Witch>,
+    
+    pub achievements: Achievements,
+    
+    pub idle_game: Option<IdleGame>,
+    
+    pub pending_unlocks: Vec<Unlockable>,
+    
+    pub hall_of_fames: HallOfFames,
+    
+    pub lookup: Lookup,
+    
+    pub mail: Mail,
+    
+    last_request_timestamp: i64,
+    
+    
+    server_time_diff: i64,
+}
+
+const SHOP_N: usize = 6;
+
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Shop {
+    pub typ: ShopType,
+    
+    pub items: [Item; SHOP_N],
+}
+
+impl Default for Shop {
+    fn default() -> Self {
+        let items = core::array::from_fn(|_| Item {
+            typ: ItemType::Unknown(0),
+            price: u32::MAX,
+            mushroom_price: u32::MAX,
+            model_id: 0,
+            class: None,
+            type_specific_val: 0,
+            attributes: EnumMap::default(),
+            gem_slot: None,
+            rune: None,
+            enchantment: None,
+            color: 0,
+            upgrade_count: 0,
+            item_quality: 0,
+            is_washed: false,
+            full_model_id: 0,
+        });
+
+        Self {
+            items,
+            typ: ShopType::Magic,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ShopPosition {
+    pub typ: ShopType,
+    pub pos: usize,
+}
+
+impl std::fmt::Display for ShopPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.typ as usize, self.pos + 1)
+    }
+}
+
+impl ShopPosition {
+    
+    #[must_use]
+    pub fn shop(&self) -> ShopType {
+        self.typ
+    }
+    
+    
+    
+    #[must_use]
+    pub fn position(&self) -> usize {
+        self.pos
+    }
+}
+
+impl Shop {
+    
+    pub fn iter(&self) -> impl Iterator<Item = (ShopPosition, &Item)> {
+        self.items
+            .iter()
+            .enumerate()
+            .map(|(pos, item)| (ShopPosition { typ: self.typ, pos }, item))
+    }
+
+    pub(crate) fn parse(
+        data: &[i64],
+        server_time: ServerTime,
+        typ: ShopType,
+    ) -> Result<Shop, SFError> {
+        let mut shop = Shop::default();
+        shop.typ = typ;
+        for (idx, item) in shop.items.iter_mut().enumerate() {
+            let d = data.skip(idx * ITEM_PARSE_LEN, "shop item")?;
+            let Some(p_item) = Item::parse(d, server_time)? else {
+                return Err(SFError::ParsingError(
+                    "shop item",
+                    format!("{d:?}"),
+                ));
+            };
+            *item = p_item;
+        }
+        Ok(shop)
+    }
+}
+
+impl GameState {
+    
+    
+    
+    
+    
+    
+    
+    
+    pub fn new(response: Response) -> Result<Self, SFError> {
+        let mut res = Self::default();
+        res.update(response)?;
+        if res.character.level == 0 || res.character.name.is_empty() {
+            return Err(SFError::ParsingError(
+                "response did not contain full player state",
+                String::new(),
+            ));
+        }
+        Ok(res)
+    }
+
+    
+    
+    
+    
+    
+    
+    pub fn update<R: Borrow<Response>>(
+        &mut self,
+        response: R,
+    ) -> Result<(), SFError> {
+        let response = response.borrow();
+        let new_vals = response.values();
+        
+        
+        if let Some(ts) = new_vals.get("timestamp").copied() {
+            let ts = ts.into("server time stamp")?;
+            let server_time = DateTime::from_timestamp(ts, 0).ok_or(
+                SFError::ParsingError("server time stamp", ts.to_string()),
+            )?;
+            self.server_time_diff = (server_time.naive_utc()
+                - response.received_at())
+            .num_seconds();
+            self.last_request_timestamp = ts;
+        }
+        let server_time = self.server_time();
+
+        self.last_fight = None;
+        self.mail.open_claimable = None;
+
+        let mut other_player: Option<OtherPlayer> = None;
+        let mut other_guild: Option<OtherGuild> = None;
+
+        let mut errors = vec![];
+        for (key, val) in new_vals.iter().map(|(a, b)| (*a, *b)) {
+            let res = self.apply_update_key(
+                key,
+                val,
+                &mut other_player,
+                &mut other_guild,
+                server_time,
+                new_vals,
+            );
+            if let Err(err) = res {
+                errors.push(err);
+            }
+        }
+
+        if let Some(og) = other_guild {
+            self.lookup.guilds.insert(og.name.clone(), og);
+        }
+        if let Some(other_player) = other_player {
+            self.lookup.insert_lookup(other_player);
+        }
+
+        
+        if self.dungeons.portal.is_some() && self.character.level < 99 {
+            self.dungeons.portal = None;
+        }
+
+        if let Some(pets) = &self.pets
+            && pets.rank == 0
+        {
+            self.pets = None;
+        }
+        if let Some(t) = &self.guild
+            && t.name.is_empty()
+        {
+            self.guild = None;
+        }
+        if self.fortress.is_some() && self.character.level < 25 {
+            self.fortress = None;
+        }
+        if let Some(fortress) = &mut self.fortress {
+            for (typ, unit) in &mut fortress.units {
+                let building_lvl =
+                    fortress.buildings.get(typ.training_building()).level;
+                let limit_modifier = match typ {
+                    FortressUnitType::Magician => 1,
+                    FortressUnitType::Archer => 2,
+                    FortressUnitType::Soldier => 3,
+                };
+                unit.limit = building_lvl * limit_modifier;
+            }
+        }
+
+        if let Some(t) = &self.underworld
+            && t.buildings[UnderworldBuildingType::HeartOfDarkness].level < 1
+        {
+            self.underworld = None;
+        }
+
+        
+        if self.witch.is_some() && self.character.level < 66 {
+            self.witch = None;
+        }
+
+        match errors.len() {
+            0 => Ok(()),
+            1 => Err(errors.remove(0)),
+            _ => Err(SFError::NestedError(errors)),
+        }
+    }
+
+    pub(crate) fn updatete_relation_list(&mut self, val: &str) {
+        self.character.relations.clear();
+        for entry in val
+            .trim_end_matches(';')
+            .split(';')
+            .filter(|a| !a.is_empty())
+        {
+            let mut parts = entry.split(',');
+            let (
+                Some(id),
+                Some(name),
+                Some(guild),
+                Some(level),
+                Some(relation),
+            ) = (
+                parts.next().and_then(|a| a.parse().ok()),
+                parts.next().map(std::string::ToString::to_string),
+                parts.next().map(std::string::ToString::to_string),
+                parts.next().and_then(|a| a.parse().ok()),
+                parts.next().and_then(|a| match a {
+                    "-1" => Some(Relationship::Ignored),
+                    "1" => Some(Relationship::Friend),
+                    _ => None,
+                }),
+            )
+            else {
+                warn!("bad friendslist entry: {entry}");
+                continue;
+            };
+            self.character.relations.push(RelationEntry {
+                id,
+                name,
+                guild,
+                level,
+                relation,
+            });
+        }
+    }
+
+    pub(crate) fn update_gttime(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        let d = &mut self.hellevator;
+        d.start = data.cstget(0, "event start", server_time)?;
+        d.end = data.cstget(1, "event end", server_time)?;
+        d.collect_time_end = data.cstget(3, "claim time end", server_time)?;
+        Ok(())
+    }
+
+    pub(crate) fn update_resources(
+        &mut self,
+        res: &[i64],
+    ) -> Result<(), SFError> {
+        self.character.mushrooms = res.csiget(1, "mushrooms", 0)?;
+        self.character.silver = res.csiget(2, "player silver", 0)?;
+        self.tavern.quicksand_glasses =
+            res.csiget(4, "quicksand glass count", 0)?;
+
+        self.specials.wheel.lucky_coins = res.csiget(3, "lucky coins", 0)?;
+        let bs = self.blacksmith.get_or_insert_with(Default::default);
+        bs.metal = res.csiget(9, "bs metal", 0)?;
+        bs.arcane = res.csiget(10, "bs arcane", 0)?;
+        let fortress = self.fortress.get_or_insert_with(Default::default);
+        fortress
+            .resources
+            .get_mut(FortressResourceType::Wood)
+            .current = res.csiget(5, "saved wood ", 0)?;
+        fortress
+            .resources
+            .get_mut(FortressResourceType::Stone)
+            .current = res.csiget(7, "saved stone", 0)?;
+
+        let pets = self.pets.get_or_insert_with(Default::default);
+        for (e_pos, element) in HabitatType::iter().enumerate() {
+            pets.habitats.get_mut(element).fruits =
+                res.csiget(12 + e_pos, "fruits", 0)?;
+        }
+
+        self.underworld
+            .get_or_insert_with(Default::default)
+            .souls_current = res.csiget(11, "uu souls saved", 0)?;
+        Ok(())
+    }
+
+    
+    
+    #[must_use]
+    pub fn server_time(&self) -> ServerTime {
+        ServerTime(self.server_time_diff)
+    }
+
+    
+    
+    
+    #[must_use]
+    fn get_fight(&mut self, header_name: &str) -> &mut SingleFight {
+        let id = fight_no_from_header(header_name);
+        let fights =
+            &mut self.last_fight.get_or_insert_with(Default::default).fights;
+
+        if fights.len() < id {
+            fights.resize(id, SingleFight::default());
+        }
+        #[allow(clippy::unwrap_used)]
+        fights.get_mut(id - 1).unwrap()
+    }
+
+    
+    #[allow(clippy::match_same_arms)]
+    fn apply_update_key(
+        &mut self,
+        key: &str,
+        val: ResponseVal<'_>,
+        other_player: &mut Option<OtherPlayer>,
+        other_guild: &mut Option<OtherGuild>,
+        server_time: ServerTime,
+        all_values: &HashMap<&str, ResponseVal<'_>>,
+    ) -> Result<(), SFError> {
+        match key {
+            "timestamp" => {
+                
+            }
+            "Success" | "sucess" => {
+                
+                
+            }
+            "login count" | "sessionid" | "cryptokey" | "cryptoid" => {
+                
+            }
+            "preregister"
+            | "languagecodelist"
+            | "tracking"
+            | "skipvideo"
+            | "cidstring"
+            | "mountexpired"
+            | "tracking_netto"
+            | "tracking_coins"
+            | "tutorial_game_entry" => {
+                
+            }
+            "ownplayername" => {
+                self.character.name.set(val.as_str());
+            }
+            "owndescription" => {
+                self.character.description = from_sf_string(val.as_str());
+            }
+            "wagesperhour" => {
+                self.tavern.guard_wage = val.into("tavern wage")?;
+            }
+            "skipallow" => {
+                let raw_skip = val.into::<i32>("skip allow")?;
+                self.tavern.mushroom_skip_allowed = raw_skip != 0;
+            }
+            "cryptoid not found" => return Err(SFError::ConnectionError),
+            "ownplayersave" => {
+                
+            }
+            "owngroupname" => self
+                .guild
+                .get_or_insert_with(Default::default)
+                .name
+                .set(val.as_str()),
+            "tavernspecialsub" => {
+                self.specials.events.active.clear();
+                let flags = val.into::<i32>("tavern special sub")?;
+                for (idx, event) in Event::iter().enumerate() {
+                    if (flags & (1 << idx)) > 0 {
+                        self.specials.events.active.insert(event);
+                    }
+                }
+            }
+            "sfhomeid" => {
+                self.character.sf_home_id =
+                    normalize_optional_account_id(val.as_str(), "sfhomeid");
+            }
+            "webshopid" => {
+                self.character.sf_home_id =
+                    normalize_optional_account_id(val.as_str(), "webshopid");
+            }
+            "backpack" => {
+                let data: Vec<i64> = val.into_list("backpack")?;
+                self.character.inventory.backpack = data
+                    .chunks_exact(ITEM_PARSE_LEN)
+                    .map(|a| Item::parse(a, server_time))
+                    .collect::<Result<Vec<_>, _>>()?;
+            }
+            "itemlevelshop" => {
+                self.shop_item_lvl = val.into("shop lvl")?;
+            }
+            "storeitemsshakes" => {
+                let data: Vec<i64> = val.into_list("weapon store")?;
+                *self.shops.get_mut(ShopType::Weapon) =
+                    Shop::parse(&data, server_time, ShopType::Weapon)?;
+            }
+            "questofferitems" => {
+                for (chunk, quest) in val
+                    .into_list("quest items")?
+                    .chunks_exact(19)
+                    .zip(&mut self.tavern.quests)
+                {
+                    quest.item = Item::parse(chunk, server_time)?;
+                }
+            }
+            #[allow(
+                clippy::indexing_slicing,
+                clippy::cast_sign_loss,
+                clippy::cast_possible_truncation
+            )]
+            #[allow(deprecated)]
+            "toiletstate" => {
+                let vals: Vec<i64> = val.into_list("toilet state")?;
+                if vals.len() < 3 {
+                    return Ok(());
+                }
+                let toilet = self.tavern.toilet.get_or_insert_default();
+                toilet.sacrifices_left = vals[2] as u32;
+            }
+            "companionequipment" => {
+                let data: Vec<i64> = val.into_list("quest items")?;
+                if data.is_empty() {
+                    return Ok(());
+                }
+                for (idx, cmp) in self
+                    .dungeons
+                    .companions
+                    .get_or_insert_with(Default::default)
+                    .values_mut()
+                    .enumerate()
+                {
+                    let data = data.skip(
+                        (19 * EquipmentSlot::COUNT) * idx,
+                        "companion item",
+                    )?;
+                    cmp.equipment = Equipment::parse(data, server_time)?;
+                }
+            }
+            "storeitemsfidget" => {
+                let data: Vec<i64> = val.into_list("magic store")?;
+                *self.shops.get_mut(ShopType::Magic) =
+                    Shop::parse(&data, server_time, ShopType::Magic)?;
+            }
+            "ownplayersaveequipment" => {
+                let data: Vec<i64> = val.into_list("player equipment")?;
+                self.character.equipment =
+                    Equipment::parse(&data, server_time)?;
+            }
+            "systemmessagelist" => {}
+            "newslist" => {}
+            "dummieequipment" => {
+                let m: Vec<i64> = val.into_list("mannequin")?;
+                self.character.mannequin =
+                    Some(Equipment::parse(&m, server_time)?);
+            }
+            "owntower" => {
+                let data = val.into_list("tower")?;
+                let companions = self
+                    .dungeons
+                    .companions
+                    .get_or_insert_with(Default::default);
+
+                for (i, class) in CompanionClass::iter().enumerate() {
+                    let comp_start = 3 + i * 148;
+                    companions.get_mut(class).level =
+                        data.cget(comp_start, "comp level")?;
+                    update_enum_map(
+                        &mut companions.get_mut(class).attributes,
+                        data.skip(comp_start + 4, "comp attrs")?,
+                    );
+                }
+                
+                self.underworld
+                    .get_or_insert_with(Default::default)
+                    .update(&data, server_time)?;
+            }
+            "owngrouprank" => {
+                self.guild.get_or_insert_with(Default::default).rank =
+                    val.into("group rank")?;
+            }
+            "owngroupattack" | "owngroupdefense" => {
+                
+            }
+            "owngrouprequirement" | "othergrouprequirement" => {
+                
+            }
+            "owngroupsave" => {
+                self.guild
+                    .get_or_insert_with(Default::default)
+                    .update_group_save(val.as_str(), server_time)?;
+            }
+            "owngroupmember" => self
+                .guild
+                .get_or_insert_with(Default::default)
+                .update_member_names(val.as_str()),
+            "owngrouppotion" => {
+                self.guild
+                    .get_or_insert_with(Default::default)
+                    .update_member_potions(val.as_str());
+            }
+            "unitprice" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .update_unit_prices(&val.into_list("fortress units")?)?;
+            }
+            "dicestatus" => {
+                let dices: Option<Vec<DiceType>> = val
+                    .into_list("dice status")?
+                    .into_iter()
+                    .map(FromPrimitive::from_u8)
+                    .collect();
+                self.tavern.dice_game.current_dice = dices.unwrap_or_default();
+            }
+            "dicereward" => {
+                let data: Vec<u32> = val.into_list("dice reward")?;
+                let win_typ: DiceType =
+                    data.cfpuget(0, "dice reward", |a| a - 1)?;
+                self.tavern.dice_game.reward = Some(DiceReward {
+                    win_typ,
+                    amount: data.cget(1, "dice reward amount")?,
+                });
+            }
+            "chathistory" => {
+                self.guild.get_or_insert_with(Default::default).chat =
+                    ChatMessage::parse_messages(val.as_str());
+            }
+            "chatwhisper" => {
+                self.guild.get_or_insert_with(Default::default).whispers =
+                    ChatMessage::parse_messages(val.as_str());
+            }
+            "upgradeprice" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .update_unit_upgrade_info(
+                        &val.into_list("fortress unit upgrade prices")?,
+                    )?;
+            }
+            "unitlevel" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .update_levels(&val.into_list("fortress unit levels")?)?;
+            }
+            "fortressprice" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .update_prices(
+                        &val.into_list("fortress upgrade prices")?,
+                    )?;
+            }
+            "Arenarank" => {
+                if let Some(uw) = self.underworld.as_mut() {
+                    uw.lure_suggestion =
+                        val.as_str().parse::<u32>().ok().map(LureSuggestion);
+                }
+            }
+            "witch" => {
+                
+            }
+            "witchshop" => {
+                self.witch
+                    .get_or_insert_with(Default::default)
+                    .update(&val.into_list("witch")?)?;
+            }
+            "underworldupgradeprice" => {
+                self.underworld
+                    .get_or_insert_with(Default::default)
+                    .update_underworld_unit_prices(
+                        &val.into_list("underworld upgrade prices")?,
+                    )?;
+            }
+            "unlockfeature" => {
+                self.pending_unlocks =
+                    Unlockable::parse(&val.into_list("unlock")?)?;
+            }
+            "dungeonprogresslight" => self.dungeons.update_progress(
+                &val.into_list("dungeon progress light")?,
+                DungeonType::Light,
+            ),
+            "dungeonprogressshadow" => self.dungeons.update_progress(
+                &val.into_list("dungeon progress shadow")?,
+                DungeonType::Shadow,
+            ),
+            "portalprogress" => {
+                self.dungeons
+                    .portal
+                    .get_or_insert_with(Default::default)
+                    .update(&val.into_list("portal progress")?, server_time)?;
+            }
+            "tavernspecialend" => {
+                self.specials.events.ends = server_time
+                    .convert_to_local(val.into("event end")?, "event end");
+            }
+            "owntowerlevel" => {
+                
+            }
+            "serverversion" => {
+                
+            }
+            "stoneperhournextlevel" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .resources
+                    .get_mut(FortressResourceType::Stone)
+                    .production
+                    .per_hour_next_lvl = val.into("stone next lvl")?;
+            }
+            "woodperhournextlevel" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .resources
+                    .get_mut(FortressResourceType::Wood)
+                    .production
+                    .per_hour_next_lvl = val.into("wood next lvl")?;
+            }
+            "shadowlevel" | "dungeonlevel" => {
+                
+            }
+            "gttime" => {
+                self.update_gttime(&val.into_list("gttime")?, server_time)?;
+            }
+            "gtsave" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .update(&val.into_list("gtsave")?, server_time)?;
+            }
+            "maxrank" => {
+                self.hall_of_fames.players_total = val.into("player count")?;
+            }
+            "achievement" => {
+                self.achievements.update(&val.into_list("achievements")?)?;
+            }
+            "groupskillprice" => {
+                self.guild
+                    .get_or_insert_with(Default::default)
+                    .update_group_prices(
+                        &val.into_list("guild skill prices")?,
+                    )?;
+            }
+            "soldieradvice" => {
+                
+            }
+            "owngroupdescription" => self
+                .guild
+                .get_or_insert_with(Default::default)
+                .update_description_embed(val.as_str()),
+            "idle" => {
+                self.idle_game = IdleGame::parse_idle_game(
+                    &val.into_list("idle game")?,
+                    server_time,
+                );
+            }
+            "resources" => {
+                self.update_resources(&val.into_list("resources")?)?;
+            }
+            "chattime" => {
+                
+                
+                
+                
+                
+            }
+            "maxpetlevel" => {
+                self.pets.get_or_insert_with(Default::default).max_pet_level =
+                    val.into("max pet lvl")?;
+            }
+            "otherdescription" => {
+                other_player
+                    .get_or_insert_with(Default::default)
+                    .description = from_sf_string(val.as_str());
+            }
+            "otherplayergroupname" => {
+                let guild =
+                    Some(val.as_str().to_string()).filter(|a| !a.is_empty());
+                other_player.get_or_insert_with(Default::default).guild = guild;
+            }
+            "otherplayername" => {
+                other_player
+                    .get_or_insert_with(Default::default)
+                    .name
+                    .set(val.as_str());
+            }
+            "otherplayersaveequipment" => {
+                let data: Vec<i64> = val.into_list("other player equipment")?;
+                other_player.get_or_insert_with(Default::default).equipment =
+                    Equipment::parse(&data, server_time)?;
+            }
+            "fortresspricereroll" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .opponent_reroll_price = val.into("fortress reroll")?;
+            }
+            "fortresswalllevel" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .wall_combat_lvl = val.into("fortress wall lvl")?;
+            }
+            "dragongoldbonus" => {
+                self.character.mount_dragon_refund = val.into("dragon gold")?;
+            }
+            "wheelresult" => {
+                
+                
+                let upgraded = self.character.level >= 95
+                    && self.pets.is_some()
+                    && self.underworld.is_some();
+                self.specials.wheel.result = Some(WheelReward::parse(
+                    &val.into_list("wheel result")?,
+                    upgraded,
+                )?);
+            }
+            "dailyreward" => {
+                
+            }
+            "calenderreward" => {
+                
+            }
+            "oktoberfest" => {
+                
+                
+                if !val.as_str().is_empty() {
+                    warn!("oktoberfest response is not empty: {val}");
+                }
+            }
+            "usersettings" => {
+                
+                let vals: Vec<_> = val.as_str().split('/').collect();
+                let v = match vals.as_slice().cget(4, "questing setting")? {
+                    "a" => ExpeditionSetting::PreferExpeditions,
+                    "0" | "b" => ExpeditionSetting::PreferQuests,
+                    x => {
+                        error!("Weird expedition settings: {x}");
+                        ExpeditionSetting::PreferQuests
+                    }
+                };
+                self.tavern.questing_preference = v;
+            }
+            "mailinvoice" => {
+                
+            }
+            "calenderinfo" => {
+                
+                
+                let data: Vec<i64> = val.into_list("calendar")?;
+                self.specials.calendar.rewards.clear();
+                for p in data.chunks_exact(2) {
+                    let reward = CalendarReward::parse(p)?;
+                    self.specials.calendar.rewards.push(reward);
+                }
+            }
+            "othergroupattack" => {
+                other_guild.get_or_insert_with(Default::default).attacks =
+                    Some(val.to_string());
+            }
+            "othergroupdefense" => {
+                other_guild
+                    .get_or_insert_with(Default::default)
+                    .defends_against = Some(val.to_string());
+            }
+            "inboxcapacity" => {
+                self.mail.inbox_capacity = val.into("inbox cap")?;
+            }
+            "magicregistration" => {
+                
+                
+            }
+            "Ranklistplayer" => {
+                self.hall_of_fames.players.clear();
+                for player in val.as_str().trim_matches(';').split(';') {
+                    
+                    if player.ends_with(",,,0,0,0,") {
+                        break;
+                    }
+
+                    match HallOfFamePlayer::parse(player) {
+                        Ok(x) => {
+                            self.hall_of_fames.players.push(x);
+                        }
+                        Err(err) => warn!("{err}"),
+                    }
+                }
+            }
+            "ranklistgroup" => {
+                self.hall_of_fames.guilds.clear();
+                for guild in val.as_str().trim_matches(';').split(';') {
+                    match HallOfFameGuild::parse(guild) {
+                        Ok(x) => {
+                            self.hall_of_fames.guilds.push(x);
+                        }
+                        Err(err) => warn!("{err}"),
+                    }
+                }
+            }
+            "maxrankgroup" => {
+                self.hall_of_fames.guilds_total = Some(val.into("guild max")?);
+            }
+            "maxrankPets" => {
+                self.hall_of_fames.pets_total = Some(val.into("pet rank max")?);
+            }
+            "RanklistPets" => {
+                self.hall_of_fames.pets.clear();
+                for entry in val.as_str().trim_matches(';').split(';') {
+                    match HallOfFamePets::parse(entry) {
+                        Ok(x) => {
+                            self.hall_of_fames.pets.push(x);
+                        }
+                        Err(err) => warn!("{err}"),
+                    }
+                }
+            }
+            "ranklistfortress" | "Ranklistfortress" => {
+                self.hall_of_fames.fortresses.clear();
+                for guild in val.as_str().trim_matches(';').split(';') {
+                    match HallOfFameFortress::parse(guild) {
+                        Ok(x) => {
+                            self.hall_of_fames.fortresses.push(x);
+                        }
+                        Err(err) => warn!("{err}"),
+                    }
+                }
+            }
+            "ranklistunderworld" => {
+                self.hall_of_fames.underworlds.clear();
+                for entry in val.as_str().trim_matches(';').split(';') {
+                    match HallOfFameUnderworld::parse(entry) {
+                        Ok(x) => {
+                            self.hall_of_fames.underworlds.push(x);
+                        }
+                        Err(err) => warn!("{err}"),
+                    }
+                }
+            }
+            "gamblegoldvalue" => {
+                self.tavern.gamble_result =
+                    Some(GambleResult::SilverChange(val.into("gold gamble")?));
+            }
+            "gamblecoinvalue" => {
+                self.tavern.gamble_result = Some(GambleResult::MushroomChange(
+                    val.into("gold gamble")?,
+                ));
+            }
+            "maxrankFortress" => {
+                self.hall_of_fames.fortresses_total =
+                    Some(val.into("fortress max")?);
+            }
+            "underworldprice" => self
+                .underworld
+                .get_or_insert_with(Default::default)
+                .update_building_prices(&val.into_list("ub prices")?)?,
+            "owngroupknights" => self
+                .guild
+                .get_or_insert_with(Default::default)
+                .update_group_knights(val.as_str()),
+            "friendlist" => self.updatete_relation_list(val.as_str()),
+            "legendaries" => {
+                if val.as_str().chars().any(|a| a != 'A') {
+                    warn!("Found a legendaries value, that is not just AAA..");
+                }
+            }
+            "smith" => {
+                let data: Vec<i64> = val.into_list("smith")?;
+                let bs = self.blacksmith.get_or_insert_with(Default::default);
+
+                bs.dismantle_left = data.csiget(0, "dismantles left", 0)?;
+                bs.last_dismantled = data.cstget(1, "bs time", server_time)?;
+            }
+            "tavernspecial" => {
+                
+            }
+            "fortressGroupPrice" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .hall_of_knights_upgrade_price = FortressCost::parse(
+                    &val.into_list("hall of knights prices")?,
+                )?;
+            }
+            "goldperhournextlevel" => {
+                
+            }
+            "underworldmaxsouls" => {
+                
+            }
+            "dailytaskrewardpreview" => {
+                let vals: Vec<i64> =
+                    val.into_list("event task reward preview")?;
+                self.specials.tasks.daily.rewards = parse_rewards(&vals);
+            }
+            "expeditionevent" => {
+                let data: Vec<i64> = val.into_list("exp event")?;
+                self.tavern.expeditions.start =
+                    data.cstget(0, "expedition start", server_time)?;
+                let end = data.cstget(1, "expedition end", server_time)?;
+                self.tavern.expeditions.end = end;
+            }
+            "expeditions" => {
+                let data: Vec<i64> = val.into_list("exp event")?;
+
+                if !data.len().is_multiple_of(8) {
+                    warn!(
+                        "Available expeditions have weird size: {data:?} {}",
+                        data.len()
+                    );
+                }
+                self.tavern.expeditions.available = data
+                    .chunks_exact(8)
+                    .map(|data| {
+                        Ok(AvailableExpedition {
+                            target: data
+                                .cfpget(0, "expedition typ", |a| a)?
+                                .unwrap_or_default(),
+                            location_1: data
+                                .cfpget(4, "exp loc 1", |a| a)?
+                                .unwrap_or_default(),
+                            location_2: data
+                                .cfpget(5, "exp loc 2", |a| a)?
+                                .unwrap_or_default(),
+                            thirst_for_adventure_sec: data
+                                .csiget(6, "exp alu", 600)?,
+                            special: data.cfpget(7, "exp special", |a| a)?,
+                        })
+                    })
+                    .collect::<Result<_, _>>()?;
+            }
+            "expeditionrewardresources" => {
+                
+                
+            }
+            "expeditionreward" => {
+                
+                
+                
+                
+                
+                
+                
+            }
+            "expeditionmonster" => {
+                let data: Vec<i64> = val.into_list("expedition monster")?;
+                let exp = self
+                    .tavern
+                    .expeditions
+                    .active
+                    .get_or_insert_with(Default::default);
+
+                exp.boss = ExpeditionBoss {
+                    id: data
+                        .cfpget(0, "expedition monster", |a| -a)?
+                        .unwrap_or_default(),
+                    items: soft_into(
+                        data.get(1).copied().unwrap_or_default(),
+                        "exp monster items",
+                        3,
+                    ),
+                };
+            }
+            "expeditionhalftime" => {
+                let data: Vec<i64> = val.into_list("halftime exp")?;
+                let exp = self
+                    .tavern
+                    .expeditions
+                    .active
+                    .get_or_insert_with(Default::default);
+
+                exp.halftime_for_boss_id =
+                    -data.cget(0, "halftime for boss id")?;
+                exp.rewards = data
+                    .skip(1, "halftime choice")?
+                    .chunks_exact(2)
+                    .map(Reward::parse)
+                    .collect::<Result<_, _>>()?;
+            }
+            "expeditionstate" => {
+                let data: Vec<i64> = val.into_list("exp state")?;
+                let exp = self
+                    .tavern
+                    .expeditions
+                    .active
+                    .get_or_insert_with(Default::default);
+                exp.floor_stage = data.cget(2, "floor stage")?;
+
+                exp.target_thing = data
+                    .cfpget(3, "expedition target", |a| a)?
+                    .unwrap_or_default();
+                exp.target_current = data.csiget(7, "exp current", 100)?;
+                exp.target_amount = data.csiget(8, "exp target", 100)?;
+
+                exp.current_floor = data.csiget(0, "clearing", 0)?;
+                exp.heroism = data.csiget(13, "heroism", 0)?;
+
+                exp.busy_since = data.cstget(15, "exp start", server_time)?;
+                exp.busy_until = data.cstget(16, "exp busy", server_time)?;
+
+                for (x, item) in data
+                    .skip(9, "exp items")?
+                    .iter()
+                    .copied()
+                    .zip(&mut exp.items)
+                {
+                    *item = match FromPrimitive::from_i64(x) {
+                        None if x != 0 => {
+                            warn!("Unknown item: {x}");
+                            Some(ExpeditionThing::Unknown)
+                        }
+                        x => x,
+                    };
+                }
+            }
+            "expeditioncrossroad" => {
+                
+                let data: Vec<i64> = val.into_list("cross")?;
+                let exp = self
+                    .tavern
+                    .expeditions
+                    .active
+                    .get_or_insert_with(Default::default);
+                exp.update_encounters(&data);
+            }
+            "eventtasklist" => {
+                let data: Vec<i64> = val.into_list("etl")?;
+                self.specials.tasks.event.tasks.clear();
+                for c in data.chunks_exact(4) {
+                    let task = Task::parse(c)?;
+                    self.specials.tasks.event.tasks.push(task);
+                }
+            }
+            "eventtaskrewardpreview" => {
+                let vals: Vec<i64> =
+                    val.into_list("event task reward preview")?;
+
+                self.specials.tasks.event.rewards = parse_rewards(&vals);
+            }
+            "dailytasklist" => {
+                let data: Vec<i64> = val.into_list("daily tasks list")?;
+                self.specials.tasks.daily.tasks.clear();
+
+                
+                
+                for d in data.skip(1, "daily tasks")?.chunks_exact(4) {
+                    self.specials.tasks.daily.tasks.push(Task::parse(d)?);
+                }
+            }
+            "eventtaskinfo" => {
+                let data: Vec<i64> = val.into_list("eti")?;
+                self.specials.tasks.event.theme = data
+                    .cfpget(2, "event task theme", |a| a)?
+                    .unwrap_or(EventTaskTheme::Unknown);
+                self.specials.tasks.event.start =
+                    data.cstget(0, "event t start", server_time)?;
+                self.specials.tasks.event.end =
+                    data.cstget(1, "event t end", server_time)?;
+            }
+            "scrapbook" => {
+                self.character.scrapbook = ScrapBook::parse(val.as_str());
+            }
+            "dungeonfaces" | "shadowfaces" => {
+                
+                
+                
+            }
+            "messagelist" => {
+                let data = val.as_str();
+                self.mail.inbox.clear();
+                for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
+                    match InboxEntry::parse(msg, server_time) {
+                        Ok(msg) => self.mail.inbox.push(msg),
+                        Err(e) => warn!("Invalid msg: {msg} {e}"),
+                    }
+                }
+            }
+            "messagetext" => {
+                self.mail.open_msg = Some(from_sf_string(val.as_str()));
+            }
+            "combatloglist" => {
+                self.mail.combat_log.clear();
+                for entry in val.as_str().split(';') {
+                    let parts = entry.split(',').collect::<Vec<_>>();
+                    if parts.iter().all(|a| a.is_empty()) {
+                        continue;
+                    }
+                    match CombatLogEntry::parse(&parts, server_time) {
+                        Ok(cle) => {
+                            self.mail.combat_log.push(cle);
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Unable to parse combat log entry: {parts:?} \
+                                 - {e}"
+                            );
+                        }
+                    }
+                }
+            }
+            "maxupgradelevel" => {
+                self.fortress
+                    .get_or_insert_with(Default::default)
+                    .building_max_lvl = val.into("max upgrade lvl")?;
+            }
+            "singleportalenemylevel" => {
+                self.dungeons
+                    .portal
+                    .get_or_insert_with(Default::default)
+                    .enemy_level = val.into("portal lvl").unwrap_or(u32::MAX);
+            }
+            "ownpetsstats" => {
+                self.pets
+                    .get_or_insert_with(Default::default)
+                    .update_pet_stat(&val.into_list("pet stats")?);
+            }
+            "ownpets" => {
+                let data = val.into_list("own pets")?;
+                self.pets
+                    .get_or_insert_with(Default::default)
+                    .update(&data, server_time)?;
+            }
+            "petsdefensetype" => {
+                let pet_id = val.into("pet def typ")?;
+                self.pets
+                    .get_or_insert_with(Default::default)
+                    .opponent
+                    .habitat = Some(HabitatType::from_typ_id(pet_id).ok_or(
+                    SFError::ParsingError("pet def typ", format!("{pet_id}")),
+                )?);
+            }
+            "otherplayersavecharacter" => {
+                other_player
+                    .get_or_insert_default()
+                    .update(&val.into_list("other player")?, server_time)?;
+            }
+            "otherplayersavepotions" => {
+                other_player.get_or_insert_default().active_potions =
+                    items::parse_active_potions(
+                        &val.into_list("other potions")?,
+                        server_time,
+                    );
+            }
+            "otherplayer" => {
+                let data: Vec<i64> = val.into_list("other player")?;
+                #[allow(deprecated)]
+                {
+                    other_player.get_or_insert_default().guild_joined =
+                        data.cstget(166, "other joined guild", server_time)?;
+                }
+            }
+            "otherplayerfriendstatus" => {
+                other_player
+                    .get_or_insert_with(Default::default)
+                    .relationship = warning_parse(
+                    val.into::<i32>("other friend")?,
+                    "other friend",
+                    FromPrimitive::from_i32,
+                )
+                .unwrap_or_default();
+            }
+            "otherplayerpetbonus" => {
+                other_player
+                    .get_or_insert_with(Default::default)
+                    .update_pet_bonus(&val.into_list("o pet bonus")?)?;
+            }
+            "otherplayerunitlevel" => {
+                let data: Vec<i64> =
+                    val.into_list("other player unit level")?;
+                
+                
+                other_player
+                    .get_or_insert_with(Default::default)
+                    .wall_combat_lvl = data.csiget(0, "wall_lvl", 0)?;
+            }
+            "petsrank" => {
+                self.pets.get_or_insert_with(Default::default).rank =
+                    val.into("pet rank")?;
+            }
+
+            "maxrankUnderworld" => {
+                self.hall_of_fames.underworlds_total =
+                    Some(val.into("mrank under")?);
+            }
+            "otherplayerfortressrank" => {
+                match val.into::<i64>("other player fortress rank")? {
+                    ..=-1 => {}
+                    x => {
+                        let rank = x.try_into().unwrap_or(1);
+                        other_player
+                            .get_or_insert_default()
+                            .fortress
+                            .get_or_insert_default()
+                            .rank = rank;
+                    }
+                }
+            }
+            "workreward" => {
+                
+            }
+            x if x.starts_with("winnerid") => {
+                
+                
+                let raw_winner_id = val
+                    .as_str()
+                    .split_once(|a: char| !a.is_ascii_digit())
+                    .map_or(val.as_str(), |a| a.0);
+                if let Ok(winner_id) = raw_winner_id.parse() {
+                    self.get_fight(x).winner_id = winner_id;
+                } else {
+                    error!("Invalid winner id: {raw_winner_id}");
+                }
+            }
+            "fightresult" => {
+                let data: Vec<i64> = val.into_list("fight result")?;
+                self.last_fight
+                    .get_or_insert_with(Default::default)
+                    .update_result(&data, server_time)?;
+                
+            }
+            x if x.starts_with("fightheader") => {
+                self.get_fight(x).update_fighters(val.as_str());
+            }
+            "fightgroups" => {
+                let fight =
+                    self.last_fight.get_or_insert_with(Default::default);
+                fight.update_groups(val.as_str());
+            }
+            "fightadditionalplayers" => {
+                
+                
+            }
+            "fightversion" => {
+                
+                
+                
+            }
+            x if x.starts_with("fight") && x.len() <= 7 => {
+                let fight_no = fight_no_from_header(x);
+                let wkey = format!("winnerid{fight_no}");
+                let version = if let Some(winner_id) =
+                    all_values.get(wkey.as_str())
+                {
+                    
+                    
+                    
+                    winner_id.as_str().split_once("fightversion:").map(|a| a.1)
+                } else {
+                    
+                    
+                    all_values.get("fightversion").map(|a| a.as_str())
+                };
+                let fight = self.get_fight(x);
+                if let Some(version) = version.and_then(|a| a.parse().ok()) {
+                    fight.update_rounds(val.as_str(), version)?;
+                } else {
+                    fight.actions.clear();
+                }
+            }
+            "othergroupname" => {
+                other_guild
+                    .get_or_insert_with(Default::default)
+                    .name
+                    .set(val.as_str());
+            }
+            "othergrouprank" => {
+                other_guild.get_or_insert_with(Default::default).rank =
+                    val.into("other group rank")?;
+            }
+            "othergroupfightcost" => {
+                other_guild.get_or_insert_with(Default::default).attack_cost =
+                    val.into("other group fighting cost")?;
+            }
+            "othergroupmember" => {
+                let names: Vec<_> = val.as_str().split(',').collect();
+                let og = other_guild.get_or_insert_with(Default::default);
+                og.members.resize_with(names.len(), Default::default);
+                for (m, n) in og.members.iter_mut().zip(names) {
+                    m.name.set(n);
+                }
+            }
+            "othergroupdescription" => {
+                let guild = other_guild.get_or_insert_with(Default::default);
+                let (emblem, desc) =
+                    val.as_str().split_once('§').unwrap_or(("", val.as_str()));
+
+                guild.emblem.update(emblem);
+                guild.description = from_sf_string(desc);
+            }
+            "othergroup" => {
+                other_guild
+                    .get_or_insert_with(Default::default)
+                    .update(val.as_str(), server_time)?;
+            }
+            "reward" => {
+                
+                
+            }
+            "gtdailypoints" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .guild_points_today = val.into("gtdaily").unwrap_or(0);
+            }
+            "gtchest" => {
+                
+                
+                
+                
+                
+                
+                
+                
+            }
+            "gtraidparticipants" => {
+                let all: Vec<_> = val.as_str().split('/').collect();
+                let hellevator =
+                    self.hellevator.active.get_or_insert_with(Default::default);
+
+                for floor in &mut hellevator.guild_raid_floors {
+                    floor.today_assigned.clear();
+                }
+
+                #[allow(clippy::indexing_slicing)]
+                for part in all.chunks_exact(2) {
+                    
+                    let name = part[0];
+                    
+                    let val: usize = part
+                        .cget(1, "hell raid part")
+                        .ok()
+                        .and_then(|a| a.parse().ok())
+                        .unwrap_or(0);
+                    if val > 0 {
+                        if val > hellevator.guild_raid_floors.len() {
+                            hellevator
+                                .guild_raid_floors
+                                .resize_with(val, Default::default);
+                        }
+                        if let Some(floor) =
+                            hellevator.guild_raid_floors.get_mut(val - 1)
+                        {
+                            floor.today_assigned.push(name.to_string());
+                        }
+                    }
+                }
+            }
+            "gtraidparticipantsyesterday" => {
+                let all: Vec<_> = val.as_str().split('/').collect();
+
+                let hellevator =
+                    self.hellevator.active.get_or_insert_with(Default::default);
+
+                for floor in &mut hellevator.guild_raid_floors {
+                    floor.yesterday_assigned.clear();
+                }
+
+                #[allow(clippy::indexing_slicing)]
+                for part in all.chunks_exact(2) {
+                    
+                    let name = part[0];
+                    
+                    let val: usize = part
+                        .cget(1, "hell raid part yd")
+                        .ok()
+                        .and_then(|a| a.parse().ok())
+                        .unwrap_or(0);
+                    if val > 0 {
+                        if val > hellevator.guild_raid_floors.len() {
+                            hellevator
+                                .guild_raid_floors
+                                .resize_with(val, Default::default);
+                        }
+                        if let Some(floor) =
+                            hellevator.guild_raid_floors.get_mut(val - 1)
+                        {
+                            floor.yesterday_assigned.push(name.to_string());
+                        }
+                    }
+                }
+            }
+            "gtrank" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .guild_rank = val.into("gt rank").unwrap_or(0);
+            }
+            "gtrankingmax" => {
+                self.hall_of_fames.hellevator_total =
+                    val.into("gt rank max").ok();
+            }
+            "gtbracketlist" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .brackets =
+                    val.into_list("gtbracketlist").unwrap_or_default();
+            }
+            "gtraidfights" => {
+                let data: Vec<i64> =
+                    val.into_list("gt raids").unwrap_or_default();
+
+                let hellevator =
+                    self.hellevator.active.get_or_insert_with(Default::default);
+
+                hellevator.guild_raid_signup_start = data
+                    .cstget(0, "h raid signup start", server_time)?
+                    .unwrap_or_default();
+
+                hellevator.guild_raid_start = data
+                    .cstget(1, "h raid next attack", server_time)?
+                    .unwrap_or_default();
+
+                let start = data.skip(2, "hellevator_fights")?;
+
+                let floor_count = start.len() / 5;
+
+                if floor_count > hellevator.guild_raid_floors.len() {
+                    hellevator
+                        .guild_raid_floors
+                        .resize_with(floor_count, Default::default);
+                }
+                #[allow(clippy::indexing_slicing)]
+                for (data, floor) in
+                    start.chunks_exact(5).zip(&mut hellevator.guild_raid_floors)
+                {
+                    
+                    floor.today = data[1];
+                    floor.yesterday = data[2];
+                    floor.point_reward =
+                        data.csiget(3, "floor t-reward", 0).unwrap_or(0);
+                    floor.silver_reward =
+                        data.csiget(4, "floor c-reward", 0).unwrap_or(0);
+                }
+            }
+            "gtmonsterreward" => {
+                let data: Vec<i64> =
+                    val.into_list("gt m reward").unwrap_or_default();
+
+                let hellevator =
+                    self.hellevator.active.get_or_insert_with(Default::default);
+                hellevator.monster_rewards.clear();
+
+                for chunk in data.chunks_exact(3) {
+                    let raw_typ = chunk.cget(0, "gt monster reward typ")?;
+                    if raw_typ <= 0 {
+                        continue;
+                    }
+                    let one = chunk
+                        .csiget(1, "gt monster reward typ", 0)
+                        .unwrap_or(0);
+                    if one != 0 {
+                        warn!("hellevator monster t: {one}");
+                    }
+                    let typ = HellevatorMonsterRewardTyp::parse(raw_typ);
+                    let amount: u64 =
+                        chunk.csiget(2, "gt monster reward amount", 0)?;
+                    hellevator
+                        .monster_rewards
+                        .push(HellevatorMonsterReward { typ, amount });
+                }
+            }
+            "gtdailyreward" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .rewards_today = HellevatorDailyReward::parse(
+                    &val.into_list("hdrtd").unwrap_or_default(),
+                );
+            }
+            "gtdailyrewardnext" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .rewards_next = HellevatorDailyReward::parse(
+                    &val.into_list("hdrnd").unwrap_or_default(),
+                );
+            }
+            "gtdailyrewardyesterday" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .rewards_yesterday = HellevatorDailyReward::parse(
+                    &val.into_list("hdryd").unwrap_or_default(),
+                );
+            }
+            "gtdailyrewardclaimed" => {
+                if let Some(hellevator) = self.hellevator.active.as_mut() {
+                    
+                    
+                    
+                    
+                    
+                    if !all_values.contains_key("gtdailyreward") {
+                        
+                        
+                        hellevator.rewards_yesterday = None;
+                    }
+                }
+            }
+            "gtranking" => {
+                self.hall_of_fames.hellevator = val
+                    .as_str()
+                    .split(';')
+                    .filter(|a| !a.is_empty())
+                    .map(|chunk| chunk.split(',').collect())
+                    .flat_map(|chunk: Vec<_>| -> Result<_, SFError> {
+                        Ok(HallOfFameHellevator {
+                            rank: chunk.cfsuget(0, "hh rank")?,
+                            name: chunk.cget(1, "hh name")?.to_string(),
+                            tokens: chunk.cfsuget(2, "hh tokens")?,
+                        })
+                    })
+                    .collect();
+            }
+            "gtpreviewreward" => {
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+            }
+            "gtmonster" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .current_monster = HellevatorMonster::parse(
+                    &val.into_list("h monster").unwrap_or_default(),
+                )
+                .ok();
+            }
+            "gtbonus" => {
+                self.hellevator
+                    .active
+                    .get_or_insert_with(Default::default)
+                    .daily_treat_bonus = val
+                    .into_list("gt bonus")
+                    .and_then(|a| HellevatorTreatBonus::parse(&a))
+                    .ok();
+            }
+            "pendingrewards" => {
+                let vals: Vec<_> = val.as_str().split('/').collect();
+                self.mail.claimables = vals
+                    .chunks_exact(6)
+                    .flat_map(|chunk| -> Result<ClaimableMail, SFError> {
+                        let start = chunk.cfsuget(4, "p reward start")?;
+                        let end = chunk.cfsuget(5, "p reward end")?;
+
+                        let status = match chunk.cget(1, "p read")? {
+                            "0" => ClaimableStatus::Unread,
+                            "1" => ClaimableStatus::Read,
+                            "2" => ClaimableStatus::Claimed,
+                            x => {
+                                warn!("Unknown claimable status: {x}");
+                                ClaimableStatus::Claimed
+                            }
+                        };
+
+                        Ok(ClaimableMail {
+                            typ: FromPrimitive::from_i64(
+                                chunk.cfsuget(2, "claimable typ")?,
+                            )
+                            .unwrap_or_default(),
+                            msg_id: chunk.cfsuget(0, "msg_id")?,
+                            status,
+                            name: chunk.cget(3, "reward code")?.to_string(),
+                            received: server_time
+                                .convert_to_local(start, "p start"),
+                            claimable_until: server_time
+                                .convert_to_local(end, "p end"),
+                        })
+                    })
+                    .collect();
+            }
+            "pendingrewardressources" => {
+                let vals: Vec<i64> =
+                    val.into_list("pendingrewardressources")?;
+
+                self.mail
+                    .open_claimable
+                    .get_or_insert_with(Default::default)
+                    .resources = vals
+                    .chunks_exact(2)
+                    .flat_map(|chunk| -> Result<Reward, SFError> {
+                        Ok(Reward {
+                            typ: RewardType::parse(chunk.cget(0, "c typ")?),
+                            amount: chunk.csiget(1, "c amount", 1)?,
+                        })
+                    })
+                    .collect();
+            }
+            "pendingreward" => {
+                let vals: Vec<i64> = val.into_list("pending item")?;
+                self.mail
+                    .open_claimable
+                    .get_or_insert_with(Default::default)
+                    .items = vals
+                    .chunks_exact(ITEM_PARSE_LEN)
+                    .flat_map(|a|
+                            
+                            Item::parse(a, server_time))
+                    .flatten()
+                    .collect();
+            }
+            "fightablegroups" => {
+                self.guild
+                    .get_or_insert_default()
+                    .update_fightable_targets(val.as_str())?;
+            }
+            "adventscalendar" => {
+                let vals: Vec<i64> = val.into_list("advent door")?;
+                self.specials.advent_calendar = match vals.first() {
+                    Some(0) | None => None,
+                    _ => Reward::parse(&vals).ok(),
+                };
+            }
+            "fortresschances" => {
+                
+                
+                
+            }
+            "deedsandtitlesplayersave" => {
+                
+                
+                
+            }
+            "deedshelves" => {
+                
+                
+            }
+            "fortressstorage" => {
+                self.fortress.get_or_insert_default().update_resources(
+                    &val.into_list("ft resources")?,
+                    server_time,
+                )?;
+            }
+            "fortressunits" => {
+                self.fortress
+                    .get_or_insert_default()
+                    .update_units(&val.into_list("ft units")?, server_time)?;
+            }
+            "fortress" => {
+                self.fortress
+                    .get_or_insert_default()
+                    .update(&val.into_list("fortress")?, server_time)?;
+            }
+            "wheel" => {
+                let data: Vec<i64> = val.into_list("wheel")?;
+                
+                self.specials.wheel.spins_today =
+                    data.csiget(1, "lucky turns", 0)?;
+                self.specials.wheel.next_free_spin =
+                    data.cstget(2, "next lucky turn", server_time)?;
+            }
+            "dice" => {
+                let data: Vec<i64> = val.into_list("dice")?;
+                self.tavern.dice_game.next_free =
+                    data.cstget(0, "dice next", server_time)?;
+                self.tavern.dice_game.remaining =
+                    data.csiget(1, "rem dice games", 0)?;
+            }
+            "charactergroup" => {
+                let data: Vec<i64> = val.into_list("c group")?;
+                let guild = self.guild.get_or_insert_with(Default::default);
+                guild.own_treasure_skill =
+                    data.csiget(0, "own treasure skill", 0)?;
+                guild.own_instructor_skill =
+                    data.csiget(1, "own instruction skill", 0)?;
+                guild.hydra.next_battle =
+                    data.cstget(2, "pet battle", server_time)?;
+                guild.hydra.remaining_fights =
+                    data.csiget(3, "remaining pet battles", 0)?;
+                guild.own_pet_lvl = data.csiget(4, "own pet lvl", 0)?;
+                guild.joined = data.cstget(5, "guild joined", server_time)?;
+                
+            }
+            "arena" => {
+                let data: Vec<i64> = val.into_list("arena")?;
+                self.arena.next_free_fight =
+                    data.cstget(0, "next battle time", server_time)?;
+                self.arena.fights_for_xp =
+                    data.csiget(1, "arena xp fights", 0)?;
+                for (idx, val) in self.arena.enemy_ids.iter_mut().enumerate() {
+                    *val = data.csiget(2 + idx, "arena enemy id", 0)?;
+                }
+                
+            }
+            "ownplayersavepotions" => {
+                let data: Vec<i64> = val.into_list("potions")?;
+                self.character.active_potions =
+                    items::parse_active_potions(&data, server_time);
+            }
+            "arcanetoilet" => {
+                let data: Vec<i64> = val.into_list("toilet")?;
+
+                
+                let toilet_lvl = data.cget(0, "toilet lvl")?;
+                if toilet_lvl > 0 {
+                    self.tavern
+                        .toilet
+                        .get_or_insert_with(Default::default)
+                        .update(&data, server_time)?;
+                }
+            }
+            "vipstatus" => {
+                other_player.get_or_insert_default().is_vip =
+                    val.as_str() != "0";
+            }
+            "characterstatus" => {
+                let data: Vec<i64> = val.into_list("char status")?;
+
+                self.tavern.current_action = CurrentAction::parse(
+                    data.cget(1, "action id")?,
+                    data.cget(2, "action sec")?,
+                    data.cstget(3, "current action time", server_time)?,
+                );
+
+                
+                self.tavern.beer_max = data.csiget(5, "beer total", 0)?;
+
+                self.tavern.thirst_for_adventure_sec =
+                    data.csiget(6, "remaining ALU", 0)?;
+                self.tavern.beer_drunk =
+                    data.csiget(7, "beer drunk count", 0)?;
+                self.specials.calendar.collected =
+                    data.csiget(8, "calendar collected", 245)?;
+                self.specials.calendar.next_possible =
+                    data.cstget(9, "calendar next", server_time)?;
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                self.pets
+                    .get_or_insert_with(Default::default)
+                    .next_free_exploration =
+                    data.cstget(20, "pet next free exp", server_time)?;
+                self.dungeons.next_free_fight =
+                    data.cstget(21, "dungeon timer", server_time)?;
+                if let Some(start) =
+                    data.cstget(22, "dungeon timer", server_time)?
+                {
+                    self.legendary_dungeon
+                        .active
+                        .get_or_insert_default()
+                        .healing_start = Some(start);
+                }
+                
+                
+                
+                
+                
+                
+                
+                
+                
+            }
+            "ownplayersavecharacter" => {
+                let data: Vec<i64> = val.into_list("char save")?;
+
+                self.character.player_save_id =
+                    data.csiget(0, "player save id", 0)?;
+                self.character.player_id = data.csiget(1, "player id", 0)?;
+                
+                self.character.level =
+                    data.csimget(3, "level", 0, |a| a & 0xFFFF)?;
+                self.character.experience = data.csiget(4, "experience", 0)?;
+                self.character.next_level_xp =
+                    data.csiget(5, "xp to next lvl", 0)?;
+                self.character.honor = data.csiget(6, "honor", 0)?;
+                self.character.rank = data.csiget(7, "rank", 0)?;
+                self.character.portrait =
+                    Portrait::parse(data.skip(8, "portrait")?)
+                        .unwrap_or_default();
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                self.character.race = data.cfpuget(18, "char race", |a| a)?;
+                
+                
+                self.character.class =
+                    data.cfpuget(20, "character class", |a| a - 1)?;
+                self.character.mount =
+                    data.cfpget(21, "character mount", |a| a & 0xFF)?;
+                
+                self.character.armor = data.csiget(23, "total armor", 0)?;
+                self.character.min_damage = data.csiget(24, "min damage", 0)?;
+                self.character.max_damage = data.csiget(25, "max damage", 0)?;
+                self.guild
+                    .get_or_insert_with(Default::default)
+                    .portal
+                    .damage_bonus =
+                    data.cimget(26, "portal dmg bonus", |a| a)?;
+                
+                self.dungeons
+                    .portal
+                    .get_or_insert_with(Default::default)
+                    .player_hp_bonus =
+                    data.csimget(28, "portal hp bonus", 0, |a| a)?;
+                self.character.mount_end =
+                    data.cstget(29, "mount end", server_time)?;
+                update_enum_map(
+                    &mut self.character.attribute_basis,
+                    data.skip(30, "char attr basis")?,
+                );
+                update_enum_map(
+                    &mut self.character.attribute_additions,
+                    data.skip(35, "char attr adds")?,
+                );
+                update_enum_map(
+                    &mut self.character.attribute_times_bought,
+                    data.skip(40, "char attr tb")?,
+                );
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+            }
+            "adventure" => {
+                let data: Vec<i64> = val.into_list("char save")?;
+                
+                
+                for (slice, quest) in data
+                    .skip(2, "quests")?
+                    .chunks_exact(7)
+                    .zip(&mut self.tavern.quests)
+                {
+                    quest.update(slice)?;
+                }
+            }
+            "events" => {
+                
+                
+            }
+
+            
+            "iadungeonchances" => {
+                
+            }
+            "iadungeontime" => {
+                let dungeons = &mut self.legendary_dungeon;
+
+                let vals: Vec<i64> = val.into_list("iadungeontime")?;
+                dungeons.theme = vals.cfpget(0, "ld theme", |x| x)?;
+                dungeons.start = vals.cstget(1, "ld start", server_time)?;
+                dungeons.end = vals.cstget(2, "ld end", server_time)?;
+                dungeons.close = vals.cstget(3, "ld closes", server_time)?;
+            }
+            "iadungeonstatstotal" => {
+                let dungeons =
+                    self.legendary_dungeon.active.get_or_insert_default();
+
+                let data: Vec<i64> = val.into_list("iadungeonstatstotal")?;
+                dungeons.total_stats = TotalStats::parse(&data)?;
+            }
+            "iadungeonstats" => {
+                let dungeons =
+                    self.legendary_dungeon.active.get_or_insert_default();
+
+                let data = val.into_list("iadungeonstats")?;
+                dungeons.stats = Stats::parse(&data).unwrap_or_default();
+            }
+            "iadungeon" => {
+                let data: Vec<i64> = val.into_list("iadungeon")?;
+                let dungeons =
+                    self.legendary_dungeon.active.get_or_insert_default();
+                dungeons.update(&data)?;
+                if !all_values.contains_key("iapendingitems") {
+                    dungeons.pending_items.clear();
+                }
+            }
+            "iapendingitems" => {
+                let dungeons =
+                    self.legendary_dungeon.active.get_or_insert_default();
+                dungeons.pending_items.clear();
+                let data: Vec<i64> = val.into_list("iapendingitems")?;
+                let amount: i64 = data.cget(0, "pending amount")?;
+                if amount < 1 {
+                    return Ok(());
+                }
+                for slice in
+                    data.skip(1, "ld items")?.chunks_exact(ITEM_PARSE_LEN)
+                {
+                    let Some(item) = Item::parse(slice, server_time)? else {
+                        warn!("Could not parse pending ld item");
+                        continue;
+                    };
+                    dungeons.pending_items.push(item);
+                }
+            }
+            "ialootitem" => {
+                
+            }
+            "iamerchant" => {
+                let data: Vec<i64> = val.into_list("iamerchant")?;
+
+                self.legendary_dungeon
+                    .active
+                    .get_or_insert_default()
+                    .merchant_offers = data
+                    .chunks_exact(3)
+                    .flat_map(MerchantOffer::parse)
+                    .flatten()
+                    .collect();
+            }
+            "iadungeon20cost" => {
+                self.legendary_dungeon
+                    .active
+                    .get_or_insert_default()
+                    .heal_quarter_cost = val.into("iadungeon20cost")?;
+            }
+            "iadungeonsoulstones" => {
+                let dungeons =
+                    self.legendary_dungeon.active.get_or_insert_default();
+
+                let data: Vec<i64> = val.into_list("iamerchant")?;
+                let mut chunks = data.chunks_exact(6);
+                dungeons.active_gems = chunks
+                    .by_ref()
+                    .take(3)
+                    .flat_map(GemOfFate::parse)
+                    .flatten()
+                    .collect();
+
+                dungeons.available_gems =
+                    chunks.flat_map(GemOfFate::parse).flatten().collect();
+            }
+            "iamap" => {
+                
+                
+                
+                
+
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+            }
+            "otherplayerfortressinfo" => {
+                other_player
+                    .get_or_insert_default()
+                    .update_fortress(&val.into_list("other ft")?)?;
+            }
+            x if x.contains("average") && x.ends_with("level") => {
+                
+            }
+            
+            x if x.contains("dungeonenemies") => {
+                
+            }
+            x if x.starts_with("attbonus") => {
+                
+            }
+            x => {
+                warn!("Update ignored {x} -> {val:?}");
+            }
+        }
+        Ok(())
+    }
+}
+
+fn normalize_optional_account_id(raw: &str, expected_key: &str) -> Option<String> {
+    let mut value = raw.trim();
+    if let Some(stripped) = value.strip_prefix('&') {
+        value = stripped.trim();
+    }
+
+    if let Some((prefix, rest)) = value.split_once(':')
+        && prefix.trim().eq_ignore_ascii_case(expected_key)
+    {
+        value = rest.trim();
+    }
+
+    let decoded = from_sf_string(value);
+    let normalized = decoded.trim();
+
+    if normalized.is_empty()
+        || normalized == "0"
+        || normalized.eq_ignore_ascii_case("null")
+    {
+        None
+    } else {
+        Some(normalized.to_string())
+    }
+}
+
+#[cfg(test)]
+mod account_id_tests {
+    use super::normalize_optional_account_id;
+
+    #[test]
+    fn parses_prefixed_sfhomeid_with_escape() {
+        let raw = "&sfhomeid:YRKbRSnD$r533";
+        let parsed = normalize_optional_account_id(raw, "sfhomeid");
+        assert_eq!(parsed.as_deref(), Some("YRKbRSnD#533"));
+    }
+
+    #[test]
+    fn parses_plain_id() {
+        let raw = "YRKbRSnD$r533";
+        let parsed = normalize_optional_account_id(raw, "sfhomeid");
+        assert_eq!(parsed.as_deref(), Some("YRKbRSnD#533"));
+    }
+}
+
+
+
+fn fight_no_from_header(header_name: &str) -> usize {
+    let number_str =
+        header_name.trim_start_matches(|a: char| !a.is_ascii_digit());
+    let id: usize = number_str.parse().unwrap_or(1);
+    id.max(1)
+}
+
+
+
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ServerTime(i64);
+
+impl ServerTime {
+    
+    #[must_use]
+    pub(crate) fn convert_to_local(
+        self,
+        timestamp: i64,
+        name: &str,
+    ) -> Option<DateTime<Local>> {
+        if matches!(timestamp, 0 | -1 | 1 | 11) {
+            
+            return None;
+        }
+
+        if !(1_000_000_000..=3_000_000_000).contains(&timestamp) {
+            warn!("Weird time stamp: {timestamp} for {name}");
+            return None;
+        }
+        DateTime::from_timestamp(timestamp - self.0, 0)?
+            .naive_utc()
+            .and_local_timezone(Local)
+            .latest()
+    }
+
+    
+    
+    
+    
+    #[must_use]
+    pub fn current(&self) -> NaiveDateTime {
+        Local::now().naive_local() + Duration::seconds(self.0)
+    }
+
+    #[must_use]
+    pub fn next_midnight(&self) -> std::time::Duration {
+        let current = self.current();
+        let tomorrow = current.date() + Duration::days(1);
+        let tomorrow = NaiveDateTime::from(tomorrow);
+        let sec_until_midnight =
+            (tomorrow - current).to_std().unwrap_or_default().as_secs();
+        
+        
+        std::time::Duration::from_secs(sec_until_midnight % (60 * 60 * 24))
+    }
+}
+
+
+trait StringSetExt {
+    fn set(&mut self, s: &str);
+}
+
+impl StringSetExt for String {
+    
+    
+    
+    fn set(&mut self, s: &str) {
+        self.replace_range(.., s);
+    }
+}
+
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NormalCost {
+    
+    pub silver: u64,
+    
+    pub mushrooms: u16,
+}
